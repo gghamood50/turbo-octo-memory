@@ -1,0 +1,970 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Safeway OS - Garage Solutions</title>
+    <link crossorigin="" href="https://fonts.gstatic.com/" rel="preconnect"/>
+    <link as="style" href="https://fonts.googleapis.com/css2?display=swap&family=Inter%3Awght%40400%3B500%3B700%3B900&family=Noto+Sans%3Awght%40400%3B500%3B700%3B900&family=Space+Grotesk%3Awght%40400%3B500%3B700" onload="this.rel='stylesheet'" rel="stylesheet"/>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet"/>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+</head>
+<body>
+    <!-- Login Screen -->
+    <div id="loginScreen" class="flex items-center justify-center min-h-screen bg-slate-100">
+        <div class="p-8 bg-white shadow-xl rounded-lg w-full max-w-md">
+            <div class="flex justify-center mb-6">
+                <div class="size-12 text-green-700">
+                    <svg fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                        <path clip-rule="evenodd" d="M24 4H6V17.3333V30.6667H24V44H42V30.6667V17.3333H24V4Z" fill="currentColor" fill-rule="evenodd"></path>
+                    </svg>
+                </div>
+            </div>
+            <h2 class="text-2xl font-bold text-center text-slate-800 mb-1">Welcome Back</h2>
+            <p class="text-center text-slate-600 mb-6">Sign in to access Safeway OS.</p>
+            <form id="loginForm">
+                <div class="mb-4">
+                    <label for="loginEmail" class="block text-sm font-medium text-slate-700 mb-1">Email Address</label>
+                    <input type="email" id="loginEmail" name="loginEmail" required
+                           class="form-input w-full px-4 py-2 border border-slate-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500"
+                           placeholder="you@example.com">
+                </div>
+                <div class="mb-6">
+                    <label for="loginPassword" class="block text-sm font-medium text-slate-700 mb-1">Password</label>
+                    <input type="password" id="loginPassword" name="loginPassword" required
+                           class="form-input w-full px-4 py-2 border border-slate-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500"
+                           placeholder="••••••••">
+                </div>
+                <div id="loginErrorMessage" class="mb-4 text-sm text-red-600 text-center"></div>
+                <button type="submit"
+                        class="btn-primary-stitch w-full justify-center py-3 text-base">
+                    Sign In
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Main Admin Layout Container -->
+    <div id="layoutContainer" class="relative flex size-full min-h-screen flex-col bg-slate-50 group/design-root overflow-x-hidden" style="display: none;">
+        <div class="flex h-full grow flex-col">
+            <header class="flex items-center justify-between whitespace-nowrap border-b border-solid border-slate-200 bg-white px-10 py-4 shadow-sm sticky top-0 z-50">
+                <div class="flex items-center gap-3 text-slate-900">
+                    <div class="size-8 text-green-700">
+                        <svg fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                            <path clip-rule="evenodd" d="M24 4H6V17.3333V30.6667H24V44H42V30.6667V17.3333H24V4Z" fill="currentColor" fill-rule="evenodd"></path>
+                        </svg>
+                    </div>
+                    <h1 class="text-slate-900 text-xl font-bold leading-tight tracking-[-0.015em]">Safeway OS</h1>
+                </div>
+                <nav class="flex items-center gap-1 overflow-x-auto">
+                    <a class="nav-link text-slate-700 hover:text-green-700 flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium leading-normal transition-colors" href="#" data-target="dashboard">
+                        <span class="material-icons-outlined text-xl">dashboard</span>Dashboard
+                    </a>
+                    <a class="nav-link text-slate-700 hover:text-green-700 flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium leading-normal transition-colors" href="#" data-target="jobs">
+                        <span class="material-icons-outlined text-xl">build</span>Jobs
+                    </a>
+                    <a class="nav-link text-slate-700 hover:text-green-700 flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium leading-normal transition-colors" href="#" data-target="technicians">
+                        <span class="material-icons-outlined text-xl">people</span>Technicians
+                    </a>
+                     <a class="nav-link text-slate-700 hover:text-green-700 flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium leading-normal transition-colors" href="#" data-target="schedule">
+                        <span class="material-icons-outlined text-xl">calendar_today</span>Schedule
+                    </a>
+                    <a class="nav-link text-slate-700 hover:text-green-700 flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium leading-normal transition-colors" href="#" data-target="inventory">
+                        <span class="material-icons-outlined text-xl">inventory_2</span>Inventory
+                    </a>
+                    <a class="nav-link text-slate-700 hover:text-green-700 flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium leading-normal transition-colors" href="#" data-target="warranty">
+                        <span class="material-icons-outlined text-xl">verified_user</span>Warranty
+                    </a>
+                    </a>
+                    <a class="nav-link text-slate-700 hover:text-green-700 flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium leading-normal transition-colors" href="#" data-target="daniel">
+                        <span class="material-icons-outlined text-xl">smart_toy</span>Daniel (AI)
+                    </a>
+                    <a class="nav-link text-slate-700 hover:text-green-700 flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium leading-normal transition-colors" href="#" data-target="settings">
+                        <span class="material-icons-outlined text-xl">settings</span>Settings
+                    </a>
+                </nav>
+                <div class="flex items-center gap-4">
+                    <div id="userAvatar" class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10 border-2 border-white shadow-sm" style='background-image: url("https://placehold.co/40x40/059669/FFFFFF?text=S");'></div>
+                    <button id="logoutBtn" class="text-slate-700 hover:text-green-700 flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium leading-normal transition-colors">
+                        <span class="material-icons-outlined text-xl">logout</span>Logout
+                    </button>
+                </div>
+            </header>
+
+            <main class="flex flex-1 justify-center py-8 px-4 md:px-10 lg:px-16">
+                <div class="layout-content-container flex w-full max-w-7xl flex-col gap-6">
+
+                    <section id="dashboard" class="content-section hidden">
+                        <div class="flex flex-col items-start justify-between gap-2 md:flex-row md:items-center">
+                            <div>
+                                <h1 class="text-slate-900 text-3xl font-bold leading-tight tracking-tight">Goodmorning, Fida.</h1>
+                                <p class="text-slate-600 text-base font-normal leading-normal">Lets make today productive.</p>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 mt-6">
+                            <div class="stat-card-stitch">
+                                <div class="flex items-center justify-between">
+                                    <p class="text-slate-700 text-base font-medium leading-normal">Unscheduled Jobs</p>
+                                    <span class="material-icons-outlined text-xl text-amber-500">event_busy</span>
+                                </div>
+                                <p class="text-slate-900 text-4xl font-bold leading-tight tracking-tight" id="dashboardUnscheduledJobs">0</p> 
+                            </div>
+                            <div class="stat-card-stitch">
+                                <div class="flex items-center justify-between">
+                                    <p class="text-slate-700 text-base font-medium leading-normal">Scheduled Jobs</p>
+                                    <span class="material-icons-outlined text-xl text-sky-500">event_available</span>
+                                </div>
+                                <p class="text-slate-900 text-4xl font-bold leading-tight tracking-tight" id="dashboardScheduledJobs">0</p>
+                            </div>
+                            <div class="stat-card-stitch">
+                                <div class="flex items-center justify-between">
+                                    <p class="text-slate-700 text-base font-medium leading-normal">Total Jobs</p>
+                                    <span class="material-icons-outlined text-xl text-green-500">summarize</span> 
+                                </div>
+                                <p class="text-slate-900 text-4xl font-bold leading-tight tracking-tight" id="dashboardTotalJobs">0</p>
+                            </div>
+                            <div class="stat-card-stitch">
+                                <div class="flex items-center justify-between">
+                                    <p class="text-slate-700 text-base font-medium leading-normal">Lifetime Trip Sheets</p>
+                                    <span class="material-icons-outlined text-xl text-purple-500">route</span>
+                                </div>
+                                <p class="text-slate-900 text-4xl font-bold leading-tight tracking-tight" id="dashboardLifetimeTripSheets">0</p>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
+                            <div class="lg:col-span-2 content-card-stitch">
+                                <h3 class="text-slate-800 text-lg font-semibold leading-normal">Technician Live Overview</h3>
+                                <div class="bg-slate-200 h-96 rounded-lg flex items-center justify-center text-slate-500">
+                                    <span class="material-icons-outlined text-5xl mr-2">map</span> Mock Map Area (Live Locations)
+                                </div>
+                            </div>
+                            <div class="content-card-stitch">
+                                <h3 class="text-slate-800 text-lg font-semibold leading-normal">Latest 5 Jobs</h3>
+                                <ul class="space-y-3" id="dashboardLatestJobsList">
+                                    <li class="p-3 bg-slate-50 border border-slate-200 rounded-md text-slate-500">
+                                        Loading latest jobs...
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section id="jobs" class="content-section hidden">
+                        <div class="flex flex-col items-start justify-between gap-2 md:flex-row md:items-center">
+                            <div>
+                                <h1 class="text-slate-900 text-3xl font-bold leading-tight tracking-tight">Job Management</h1>
+                                <p class="text-slate-600 text-base font-normal leading-normal">Live view of all jobs imported from Gmail.</p>
+                            </div>
+                        </div>
+                        <div class="mt-6 flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+                            <div class="flex justify-between items-center">
+                                <h3 class="text-slate-800 text-lg font-semibold leading-normal">All Imported Jobs</h3>
+                                <button id="openAddJobModalButton" class="btn-primary-stitch">
+                                    <span class="material-icons-outlined text-lg">add_circle_outline</span>Add Job Manually
+                                </button>
+                            </div>
+                            <div class="overflow-x-auto">
+                                <table class="custom-table" id="jobsTable"> 
+                                    <thead>
+                                        <tr>
+                                            <th>Customer</th>
+                                            <th>Address</th>
+                                            <th>Issue Reported</th>
+                                            <th>Phone</th>
+                                            <th>Status</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="jobsTableBody">
+                                        <!-- Live data will be injected here by JavaScript -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section id="technicians" class="content-section hidden">
+                        <div class="flex flex-col items-start justify-between gap-2 md:flex-row md:items-center">
+                            <div>
+                                <h1 class="text-slate-900 text-3xl font-bold leading-tight tracking-tight">Technician Management</h1>
+                                <p class="text-slate-600 text-base font-normal leading-normal">Manage your field service team's status, location, and capacity.</p>
+                            </div>
+                        </div>
+                        <div id="technician-cards-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mt-6">
+                            <!-- Technician cards will be dynamically inserted here -->
+                        </div>
+                    </section>
+
+                    <section id="schedule" class="content-section hidden">
+                         <div class="flex flex-col items-start justify-between gap-2 md:flex-row md:items-center">
+                            <div>
+                                <h1 class="text-slate-900 text-3xl font-bold leading-tight tracking-tight">Schedule & Dispatch</h1>
+                                <p class="text-slate-600 text-base font-normal leading-normal">Generate and approve optimized daily routes for all available technicians.</p>
+                            </div>
+                        </div>
+                        <div id="tripSheetApprovalContainer" class="hidden mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg flex items-center justify-between">
+                            <div>
+                                <h3 class="text-lg font-semibold text-blue-800">Trip Sheets Generated</h3>
+                                <p class="text-sm text-blue-700">Review the routes below. Once satisfied, approve them to finalize the schedule.</p>
+                            </div>
+                            <button id="approveTripSheetsBtn" class="btn-approve-stitch">
+                                <span class="material-icons-outlined">check_circle</span>Approve Trip Sheets
+                            </button>
+                        </div>
+                        <div class="mt-6 flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+                             <div class="flex flex-col md:flex-row justify-between items-center gap-4 mb-4">
+                                <h3 class="text-slate-800 text-lg font-semibold leading-normal">Daily Route Generation</h3>
+                                <div class="flex items-center gap-4 p-2 bg-slate-100 rounded-lg">
+                                    <label for="tripSheetDate" class="form-label text-sm font-semibold mb-0">TRIP SHEET DATE:</label>
+                                    <input type="date" id="tripSheetDate" class="form-input form-input-sm py-2 px-3 border-slate-300 shadow-sm" style="max-width: 200px;">
+                                    <button id="generateTripSheetsBtn" class="btn-primary-stitch">
+                                        <span class="material-icons-outlined text-lg">route</span>Generate Trip Sheets
+                                    </button>
+                                </div>
+                            </div>
+                            <p id="scheduleStatus" class="text-sm text-slate-500 text-center">Select a date to view or generate trip sheets.</p>
+                            <div id="trip-sheets-container" class="space-y-4">
+                                <!-- Trip sheets will be rendered here -->
+                            </div>
+                        </div>
+                    </section>
+
+                    <section id="inventory" class="content-section hidden">
+                        <div class="flex flex-col items-start justify-between gap-2 md:flex-row md:items-center">
+                            <div>
+                                <h1 class="text-slate-900 text-3xl font-bold leading-tight tracking-tight">Inventory Management</h1>
+                                <p class="text-slate-600 text-base font-normal leading-normal">Track parts and manage stock levels.</p>
+                            </div>
+                             <div class="flex gap-2">
+                                <button id="openAddPartModalButton" class="btn-primary-stitch"><span class="material-icons-outlined text-lg">add_circle_outline</span>Add New Part</button>
+                                <button id="logPartUsageButton" class="btn-secondary-stitch bg-green-50 border-green-200 text-green-700 hover:bg-green-100"><span class="material-icons-outlined text-sm vm">construction</span>Log Part Usage</button>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 mt-6">
+                            <div class="stat-card-stitch">
+                                <p class="text-slate-700 text-base font-medium leading-normal">Total Part SKUs</p>
+                                <p class="text-slate-900 text-4xl font-bold leading-tight tracking-tight" id="inventoryTotalSKUs">0</p>
+                                <p class="text-xs text-slate-500">Different parts tracked</p>
+                            </div>
+                            <div class="stat-card-stitch">
+                                <p class="text-slate-700 text-base font-medium leading-normal">Low Stock Items</p>
+                                <p class="text-red-600 text-4xl font-bold leading-tight tracking-tight" id="inventoryLowStockItems">0</p>
+                                <p class="text-xs text-slate-500">Items below reorder level</p>
+                            </div>
+                            <div class="stat-card-stitch">
+                                <p class="text-slate-700 text-base font-medium leading-normal">Est. Inventory Value</p>
+                                <p class="text-slate-900 text-4xl font-bold leading-tight tracking-tight" id="inventoryEstValue">$0</p>
+                                <p class="text-xs text-slate-500">Based on current stock</p>
+                            </div>
+                        </div>
+                        <div class="mt-6 flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+                            <h3 class="text-slate-800 text-lg font-semibold leading-normal">Parts Inventory</h3>
+                            <div class="overflow-x-auto">
+                                <table class="custom-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Part Name</th>
+                                            <th>SKU</th>
+                                            <th>Category</th>
+                                            <th>Current Stock</th>
+                                            <th>Reorder Level</th>
+                                            <th>Unit Cost</th>
+                                            <th>Supplier</th>
+                                            <th>Status</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="inventoryTableBody">
+                                        <tr><td colspan="9" class="text-center text-slate-500 py-4">Loading inventory...</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </section>
+                    <section id="warranty" class="content-section hidden">
+                        <div class="flex flex-col items-start justify-between gap-2 md:flex-row md:items-center">
+                            <div><h1 class="text-slate-900 text-3xl font-bold leading-tight tracking-tight">Invoice Management</h1><p class="text-slate-600 text-base font-normal leading-normal">Review financial performance and details for all completed jobs.</p></div>
+                             <!-- Filter Button & Pop-up Container -->
+                            <div class="relative">
+                                <button id="dateFilterToggle" class="date-filter-btn flex items-center gap-2">
+                                    <span class="material-icons-outlined text-xl">filter_list</span>
+                                    <span id="activeFilterDisplay">All Time</span>
+                                </button>
+                                <div id="dateFilterPopup" class="date-filter-popup">
+                                    <div class="p-4 space-y-4">
+                                        <div>
+                                            <p class="text-sm font-semibold text-slate-600 mb-2">Quick Ranges</p>
+                                            <div id="date-filter-presets" class="grid grid-cols-2 gap-2">
+                                                <button class="date-filter-btn text-xs" data-range="7">Last 7 Days</button>
+                                                <button class="date-filter-btn text-xs" data-range="30">Last 30 Days</button>
+                                                <button class="date-filter-btn text-xs" data-range="365">Last Year</button>
+                                                <button class="date-filter-btn text-xs active" data-range="all">All Time</button>
+                                            </div>
+                                        </div>
+                                        <hr/>
+                                        <div>
+                                            <p class="text-sm font-semibold text-slate-600 mb-2">Custom Range</p>
+                                            <div class="space-y-2">
+                                                <div class="flex items-center gap-2 text-sm"><label for="dateFrom" class="w-12">From:</label><input type="date" id="dateFrom" class="form-input text-sm p-1.5 rounded-md border-slate-300 w-full"></div>
+                                                <div class="flex items-center gap-2 text-sm"><label for="dateTo" class="w-12">To:</label><input type="date" id="dateTo" class="form-input text-sm p-1.5 rounded-md border-slate-300 w-full"></div>
+                                                <button id="applyDateRange" class="date-filter-btn bg-green-600 text-white w-full mt-2">Apply</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Stat cards -->
+                        <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 mt-6">
+                            <div class="stat-card-stitch"><div class="flex items-center justify-between"><p class="text-slate-700 text-base font-medium leading-normal">Total Invoices</p><span class="material-icons-outlined text-xl text-sky-500">receipt_long</span></div><p class="text-slate-900 text-4xl font-bold leading-tight tracking-tight" id="statsTotalInvoices">0</p></div>
+                            <div class="stat-card-stitch"><div class="flex items-center justify-between"><p class="text-slate-700 text-base font-medium leading-normal">Unclaimed Invoices</p><span class="material-icons-outlined text-xl text-amber-500">hourglass_top</span></div><p class="text-slate-900 text-4xl font-bold leading-tight tracking-tight" id="statsUnclaimedInvoices">0</p></div>
+                            <div class="stat-card-stitch"><div class="flex items-center justify-between"><p class="text-slate-700 text-base font-medium leading-normal">Claimed Invoices</p><span class="material-icons-outlined text-xl text-green-500">task_alt</span></div><p class="text-slate-900 text-4xl font-bold leading-tight tracking-tight" id="statsClaimedInvoices">0</p></div>
+                            <div class="stat-card-stitch"><div class="flex items-center justify-between"><p class="text-slate-700 text-base font-medium leading-normal">Value of Claimed</p><span class="material-icons-outlined text-xl text-purple-500">paid</span></div><p class="text-slate-900 text-4xl font-bold leading-tight tracking-tight" id="statsClaimedValue">$0.00</p></div>
+                        </div>
+
+                        <!-- Interactive Warranty Provider Cards -->
+                        <div id="provider-cards-container" class="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
+                            <div class="stat-card-stitch provider-card" data-provider="First American"><div class="provider-card-content"><h3 class="provider-card-title">First American</h3><p id="firstAmericanStats" class="provider-card-stats">0</p><p class="provider-card-subtext">Invoices</p></div></div>
+                            <div class="stat-card-stitch provider-card" data-provider="Home Guard"><div class="provider-card-content"><h3 class="provider-card-title">Home Guard</h3><p id="homeGuardStats" class="provider-card-stats">0</p><p class="provider-card-subtext">Invoices</p></div></div>
+                            <div class="stat-card-stitch provider-card" data-provider="Others"><div class="provider-card-content"><h3 class="provider-card-title">Others</h3><p id="othersStats" class="provider-card-stats">0</p><p class="provider-card-subtext">Invoices</p></div></div>
+                        </div>
+
+                        <!-- "Completed Jobs & Invoices" section -->
+                        <div class="mt-6 flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+                            <div class="flex justify-between items-center">
+                                <h3 id="invoiceTableTitle" class="text-slate-800 text-lg font-semibold leading-normal">Latest 5 Completed Jobs</h3>
+                                <button id="viewAllInvoicesBtn" class="font-semibold text-sm text-green-600 hover:text-green-700 transition-colors" style="display: none;">View All</button>
+                            </div>
+                            <div class="overflow-x-auto"><table id="warrantyTable" class="custom-table"><thead><tr><th>Customer</th><th>Address</th><th>Completion Date</th><th>Technician</th><th>Actions</th></tr></thead><tbody id="warrantyTableBody"><tr><td colspan="5" class="text-center text-slate-500 py-4">Loading invoices...</td></tr></tbody></table></div>
+                        </div>
+                    </section>
+                    <section id="daniel" class="content-section hidden bg-gradient-to-br from-slate-50 via-green-50 to-slate-50 p-0 m-0 flex flex-col" style="height: calc(100vh - 160px);"> 
+                        <div class="flex flex-col items-start justify-between gap-2 md:flex-row md:items-center px-6 pt-6 pb-2">
+                             <div>
+                                <h1 class="text-slate-900 text-3xl font-bold leading-tight tracking-tight">Daniel - Your AI Assistant</h1>
+                                <p class="text-slate-600 text-base font-normal leading-normal">Ask questions about scheduling, job details, or get quick solutions.</p>
+                            </div>
+                        </div>
+                        <div class="chat-container bg-white flex-grow mx-6 mb-6">
+                            <div id="chatLog" class="chat-log">
+                                <!-- Initial AI message will be added by JavaScript -->
+                            </div>
+                            <div class="chat-input-area">
+                                <input type="text" id="chatInput" class="chat-input" placeholder="Type your question here...">
+                                <button id="sendChatButton" class="chat-send-btn">
+                                    <span class="material-icons-outlined text-lg">send</span>
+                                </button>
+                            </div>
+                        </div>
+                    </section>
+                    <section id="settings" class="content-section hidden">
+                        <div class="flex flex-col items-start justify-between gap-2 md:flex-row md:items-center">
+                            <div>
+                                <h1 class="text-slate-900 text-3xl font-bold leading-tight tracking-tight">Settings</h1>
+                                <p class="text-slate-600 text-base font-normal leading-normal">Manage your application preferences.</p>
+                            </div>
+                        </div>
+                        <div class="mt-6 content-card-stitch">
+                            <h3 class="text-slate-800 text-lg font-semibold leading-normal mb-4">Appearance</h3>
+                            <div class="flex items-center justify-between py-3">
+                                <label for="darkModeToggle" class="text-slate-700 font-medium">Dark Mode</label>
+                                <div class="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
+                                    <input type="checkbox" name="darkModeToggle" id="darkModeToggle" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer"/>
+                                    <label for="darkModeToggle" class="toggle-label block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer"></label>
+                                </div>
+                            </div>
+                            <p class="text-xs text-slate-500 mt-1">Toggle to switch between light and dark themes for the application.</p>
+                        </div>
+                    </section>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Worker PWA View -->
+    <div id="workerPwaView" class="hidden relative flex size-full min-h-screen flex-col bg-white justify-between group/design-root overflow-x-hidden" style='font-family: "Space Grotesk", "Noto Sans", sans-serif;'>
+        <div>
+            <div class="flex items-center bg-white p-4 pb-2 justify-between sticky top-0">
+                <div class="flex w-12"></div>
+                <h2 id="workerName" class="text-[#111418] text-lg font-bold leading-tight tracking-[-0.015em] flex-1 text-center">Hello, Worker</h2>
+                <div class="flex w-12 items-center justify-end">
+                    <button id="workerLogoutBtn" class="flex max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-12 bg-transparent text-[#111418] gap-2 text-base font-bold leading-normal tracking-[0.015em] min-w-0 p-0">
+                        <div class="text-[#111418]" data-icon="SignOut" data-size="24px" data-weight="regular">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24px" height="24px" fill="currentColor" viewBox="0 0 256 256"><path d="M112,216a8,8,0,0,1-8,8H48a16,16,0,0,1-16-16V48A16,16,0,0,1,48,32h56a8,8,0,0,1,0,16H56V200h48A8,8,0,0,1,112,216Zm115.51-99.51-48-48a8,8,0,0,0-11.32,11.32L196.69,108H104a8,8,0,0,0,0,16h92.69l-28.5,28.49a8,8,0,0,0,11.32,11.32l48-48A8,8,0,0,0,227.51,116.49Z"></path></svg>
+                        </div>
+                    </button>
+                </div>
+            </div>
+            <p id="workerCurrentDate" class="text-[#60758a] text-sm font-normal leading-normal pb-3 pt-1 px-4 text-center">Monday, July 22</p>
+            <h2 id="todaysRouteHeading" class="text-[#111418] text-[22px] font-bold leading-tight tracking-[-0.015em] px-4 pb-3 pt-5">Today's Route</h2>
+            
+            <div id="workerTodaysRoute" class="flex flex-col">
+                <!-- Jobs will be dynamically inserted here by JavaScript -->
+            </div>
+        </div>
+        
+        <div class="sticky bottom-0">
+            <div class="flex gap-2 border-t border-[#f0f2f5] bg-white px-4 pb-3 pt-2">
+                <a class="just flex flex-1 flex-col items-center justify-end gap-1 rounded-full text-[#111418]" href="#">
+                    <div class="text-[#111418] flex h-8 items-center justify-center" data-icon="House" data-size="24px" data-weight="fill">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24px" height="24px" fill="currentColor" viewBox="0 0 256 256"><path d="M224,115.55V208a16,16,0,0,1-16,16H168a16,16,0,0,1-16-16V168a8,8,0,0,0-8-8H112a8,8,0,0,0-8,8v40a16,16,0,0,1-16,16H48a16,16,0,0,1-16-16V115.55a16,16,0,0,1,5.17-11.78l80-75.48.11-.11a16,16,0,0,1,21.53,0,1.14,1.14,0,0,0,.11.11l80,75.48A16,16,0,0,1,224,115.55Z"></path></svg>
+                    </div>
+                    <p class="text-[#111418] text-xs font-medium leading-normal tracking-[0.015em]">Home</p>
+                </a>
+                
+                <a class="just flex flex-1 flex-col items-center justify-end gap-1 text-[#60758a]" href="#">
+                    <div class="text-[#60758a] flex h-8 items-center justify-center" data-icon="Receipt" data-size="24px" data-weight="regular">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24px" height="24px" fill="currentColor" viewBox="0 0 256 256"><path d="M72,104a8,8,0,0,1,8-8h96a8,8,0,0,1,0,16H80A8,8,0,0,1,72,104Zm8,40h96a8,8,0,0,0,0-16H80a8,8,0,0,0,0,16ZM232,56V208a8,8,0,0,1-11.58,7.15L192,200.94l-28.42,14.21a8,8,0,0,1-7.16,0L128,200.94,99.58,215.15a8,8,0,0,1-7.16,0L64,200.94,35.58,215.15A8,8,0,0,1,24,208V56A16,16,0,0,1,40,40H216A16,16,0,0,1,232,56Zm-16,0H40V195.06l20.42-10.22a8,8,0,0,1,7.16,0L96,199.06l28.42-14.22a8,8,0,0,1,7.16,0L160,199.06l28.42-14.22a8,8,0,0,1,7.16,0L216,195.06Z"></path></svg>
+                    </div>
+                    <p class="text-[#60758a] text-xs font-medium leading-normal tracking-[0.015em]">Invoices</p>
+                </a>
+                
+            </div>
+            <div class="h-5 bg-white"></div>
+        </div>
+    </div>
+
+    <div id="invoiceFormScreen" class="page hidden">
+            <div class="page-header">
+                <button id="backToCurrentHomeBtn" class="btn-back"><i class="fas fa-chevron-left"></i> Home</button>
+                <h1 id="invoiceFormTitle">New Invoice</h1>
+                <span class="header-spacer"></span>
+            </div>
+
+            <div class="invoice-form-content">
+                <form id="invoiceForm" class="space-y-5">
+                    <div class="card">
+                        <h2 class="text-lg font-semibold mb-3">Invoice Details</h2>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label for="invoiceNumberDisplay" class="form-label">Invoice #</label>
+                                <input type="text" id="invoiceNumberDisplay" name="invoiceNumberDisplay" class="form-input bg-gray-100 cursor-not-allowed" readonly placeholder="Loading next...">
+                            </div>
+                            <div>
+                                <label for="invoiceDate" class="form-label">Date</label>
+                                <input type="date" id="invoiceDate" name="invoiceDate" class="form-input" placeholder="YYYY-MM-DD" required>
+                            </div>
+                            <div class="sm:col-span-2">
+                                <label for="poNumber" class="form-label">P.O. Number</label>
+                                <input type="text" id="poNumber" name="poNumber" class="form-input" placeholder="Optional P.O. Number">
+                            </div>
+                            <div id="countyTaxRadioGroup" class="sm:col-span-2">
+                                <label class="form-label mb-1">County Tax:</label>
+                                <div class="flex flex-col sm:flex-row sm:flex-wrap items-start sm:items-center gap-y-2 gap-x-4">
+                                    <label class="flex items-center">
+                                        <input type="radio" name="countyTax" value="Orange County" data-rate="7.75" class="form-radio h-4 w-4 text-green-600 border-gray-300 focus:ring-green-500">
+                                        <span class="ml-2 text-sm text-gray-700">Orange County (7.75%)</span>
+                                    </label>
+                                    <label class="flex items-center">
+                                        <input type="radio" name="countyTax" value="LA 1" data-rate="9.75" class="form-radio h-4 w-4 text-green-600 border-gray-300 focus:ring-green-500">
+                                        <span class="ml-2 text-sm text-gray-700">LA 1 (9.75%)</span>
+                                    </label>
+                                    <label class="flex items-center">
+                                        <input type="radio" name="countyTax" value="LA 2" data-rate="10.75" class="form-radio h-4 w-4 text-green-600 border-gray-300 focus:ring-green-500">
+                                        <span class="ml-2 text-sm text-gray-700">LA 2 (10.75%)</span>
+                                    </label>
+                                     <label class="flex items-center">
+                                        <input type="radio" name="countyTax" value="Other" data-rate="0" class="form-radio h-4 w-4 text-green-600 border-gray-300 focus:ring-green-500">
+                                        <span class="ml-2 text-sm text-gray-700">Other (Custom)</span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div id="customTaxArea" class="hidden sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4 mt-2">
+                                <div>
+                                    <label for="customAreaName" class="form-label">Custom Area Name</label>
+                                    <input type="text" id="customAreaName" name="customAreaName" class="form-input" placeholder="e.g., San Diego">
+                                </div>
+                                <div>
+                                    <label for="customTaxRate" class="form-label">Custom Tax Rate (%)</label>
+                                    <input type="number" id="customTaxRate" name="customTaxRate" class="form-input" placeholder="e.g., 8.25" step="0.01">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                     <div class="card">
+                        <h2 class="text-lg font-semibold mb-3">Plan & Warranty</h2>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label for="planType" class="form-label">Plan Type</label>
+                                <input type="text" id="planType" name="planType" class="form-input" placeholder="e.g., Basic, Premium">
+                            </div>
+                            <div>
+                                <label for="warrantyName" class="form-label">Warranty Name</label>
+                                <input type="text" id="warrantyName" name="warrantyName" class="form-input" placeholder="e.g., 1-Year Parts">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <h2 class="text-lg font-semibold mb-3">Customer Information</h2>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label for="customerName" class="form-label">Name</label>
+                                <input type="text" id="customerName" name="customerName" class="form-input" placeholder="Customer's full name" required>
+                            </div>
+                            <div>
+                                <label for="customerPhone" class="form-label">Phone</label>
+                                <input type="tel" id="customerPhone" name="customerPhone" class="form-input" placeholder="(XXX) XXX-XXXX">
+                            </div>
+                            <div class="sm:col-span-2">
+                                <label for="customerEmail" class="form-label">Email</label>
+                                <input type="email" id="customerEmail" name="customerEmail" class="form-input" placeholder="customer@example.com" required>
+                            </div>
+                        </div>
+                        <div class="mt-4">
+                            <label for="customerAddress" class="form-label">Address</label>
+                            <input type="text" id="customerAddress" name="customerAddress" class="form-input" placeholder="Street, City, State, Zip">
+                        </div>
+                        <div class="mt-4">
+                            <label for="jobAddress" class="form-label">Job Address (if different)</label>
+                            <input type="text" id="jobAddress" name="jobAddress" class="form-input" placeholder="Street, City, State, Zip">
+                        </div>
+                        <div class="mt-4">
+                            <label for="typeOfEquipment" class="form-label">Type of Equipment</label>
+                            <textarea id="typeOfEquipment" name="typeOfEquipment" rows="2" class="form-input" placeholder="e.g., Garage Door Opener, Springs"></textarea>
+                        </div>
+                        <div class="mt-4">
+                            <label for="jobDescription" class="form-label">Job Description</label>
+                            <textarea id="jobDescription" name="jobDescription" rows="3" class="form-input" placeholder="Describe the work performed..."></textarea>
+                        </div>
+                        <div class="mt-4">
+                            <label for="recommendations" class="form-label">Recommendations</label>
+                            <textarea id="recommendations" name="recommendations" rows="3" class="form-input" placeholder="Enter any recommendations..."></textarea>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <h2 class="text-lg font-semibold mb-3">Items / Services</h2>
+                        <div id="lineItemsContainer" class="space-y-3"></div>
+                        <button type="button" id="addItemBtn" class="btn btn-secondary mt-3 text-sm py-2 px-3">Add Item</button>
+                    </div>
+
+                    <div class="card">
+                        <h2 class="text-lg font-semibold mb-3">Non-Covered Items</h2>
+                        <textarea id="nonCoveredItemsText" name="nonCoveredItemsText" rows="3" class="form-input" placeholder="Enter any non-covered items or services..."></textarea>
+                    </div>
+
+                    <div class="card">
+                        <h2 class="text-lg font-semibold mb-3">Payment Method</h2>
+                        <div id="paymentMethodRadioGroup" class="payment-method-group">
+                            <label class="flex items-center">
+                                <input type="radio" name="paymentMethod" value="Cash" required class="form-radio h-4 w-4 text-green-600 border-gray-300 focus:ring-green-500">
+                                <span class="ml-2 text-sm text-gray-700">Cash</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="radio" name="paymentMethod" value="Credit/Debit Card" class="form-radio h-4 w-4 text-green-600 border-gray-300 focus:ring-green-500">
+                                <span class="ml-2 text-sm text-gray-700">Credit/Debit Card</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="radio" name="paymentMethod" value="Cheque" class="form-radio h-4 w-4 text-green-600 border-gray-300 focus:ring-green-500">
+                                <span class="ml-2 text-sm text-gray-700">Cheque</span>
+                            </label>
+                            <label class="flex items-center">
+                                <input type="radio" name="paymentMethod" value="No Payment" required class="form-radio h-4 w-4 text-green-600 border-gray-300 focus:ring-green-500">
+                                <span class="ml-2 text-sm text-gray-700">No Payment</span>
+                            </label>
+                        </div>
+                        <div id="chequeNumberArea" class="hidden mt-4">
+                            <label for="chequeNumber" class="form-label">Cheque #</label>
+                            <input type="text" id="chequeNumber" name="chequeNumber" class="form-input" placeholder="Enter cheque number">
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <h2 class="text-lg font-semibold mb-3">Summary</h2>
+                        <div class="space-y-2">
+                            <div class="flex justify-between">
+                                <span class="form-label">Subtotal:</span>
+                                <span id="subtotalDisplay" class="font-medium">$0.00</span>
+                            </div>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
+                                <div>
+                                    <label for="labor" class="form-label">Labor ($):</label>
+                                    <input type="number" id="labor" name="labor" class="form-input text-right" value="0" min="0" step="0.01" placeholder="0.00">
+                                </div>
+                                <div>
+                                    <label for="serviceCall" class="form-label">Service Call ($):</label>
+                                    <input type="number" id="serviceCall" name="serviceCall" class="form-input text-right" value="0" min="0" step="0.01" placeholder="0.00">
+                                </div>
+                            </div>
+                            <div class="mt-2">
+                                <label for="salesTaxRate" class="form-label">Sales Tax Rate (%):</label>
+                                <input type="number" id="salesTaxRate" name="salesTaxRate" class="form-input text-right bg-gray-100 cursor-not-allowed" value="0.00" min="0" step="0.01" readonly>
+                            </div>
+                            <div class="flex justify-between mt-1">
+                                <span class="form-label">Calculated Sales Tax:</span>
+                                <span id="salesTaxAmountDisplay" class="font-medium">$0.00</span>
+                            </div>
+                            <hr class="my-3 border-gray-300">
+                            <div class="flex justify-between font-bold text-lg">
+                                <span style="color: var(--color-darkest);">TOTAL:</span>
+                                <span id="totalDisplay" style="color: var(--color-accent);">$0.00</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="termsAndConditionsSection" class="card">
+                        <h2 class="text-lg font-semibold mb-2">Terms & Conditions</h2>
+                        <div class="terms-text-container p-2 border border-gray-200 rounded-md bg-gray-50 text-xs text-gray-600">
+                            <p>Payment due upon receipt of invoice. A service charge of $5.00 or 1.5% monthly (whichever is greater) will be charged on all balances over 15 days from date of invoice.</p>
+                            <p class="mt-1">Service and Parts Warranty: All new parts described in the invoice are covered by MANUFACTURER'S warranty. Safeway Garage Doors agrees to supply said in-warranty parts for one year at no charge. Labor warranty on SERVICE CALLS is 30 Days on same problem.</p>
+                        </div>
+                        <p class="mt-2 text-red-600 font-bold text-sm text-center">By signing, you agree to the terms and conditions.</p>
+                    </div>
+
+                    <div class="card" id="signatureSection">
+                        <h2 class="text-lg font-semibold mb-3">Customer Signature</h2>
+                        <div id="signatureLoadingMessage" class="text-sm text-gray-500 italic hidden mb-2">
+                            <i class="fas fa-spinner fa-spin mr-2"></i>Wait, E-signature is loading...
+                        </div>
+                        <div id="signatureDisplayArea">
+                            <img id="previewSignatureImg" src="#" alt="Signature Preview" class="hidden signature-preview">
+                            <div class="signature-pad-container">
+                                <canvas id="signatureCanvas"></canvas>
+                            </div>
+                        </div>
+                        <div class="signature-pad-actions mt-2">
+                            <button type="button" id="clearSignatureBtn" class="btn btn-secondary btn-sm">Clear Signature</button>
+                            <button type="button" id="confirmSignatureBtn" class="btn btn-primary btn-sm">Confirm Signature</button>
+                            <button type="button" id="editSignatureBtn" class="btn btn-secondary btn-sm hidden">Edit Signature</button>
+                        </div>
+                        <div id="signedBySection" class="mt-2 hidden">
+                            <p class="text-sm">Signed by: <span id="signedByName" class="font-medium"></span></p>
+                        </div>
+                    </div>
+
+                    <div class="scroll-spacer" style="height: 100px;"></div>
+                </form>
+            </div>
+            <div class="form-actions">
+                <button type="button" id="downloadPdfBtn" class="btn btn-secondary">Download PDF</button>
+                <button type="button" id="clearFormBtn" class="btn btn-secondary">Clear Form</button>
+                <button type="button" id="saveInvoiceBtn" class="btn btn-primary">Save Invoice</button>
+            </div>
+        </div>
+
+    <div id="afterSendInvoiceScreen" class="page hidden">
+          <div
+      class="relative flex size-full min-h-screen flex-col bg-white justify-between group/design-root overflow-x-hidden"
+      style='font-family: "Space Grotesk", "Noto Sans", sans-serif;'
+    >
+      <div>
+        <div class="flex items-center bg-white p-4 pb-2 justify-between">
+          <div id="backToInvoiceFormBtn" class="text-[#111518] flex size-12 shrink-0 items-center" data-icon="ArrowLeft" data-size="24px" data-weight="regular">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24px" height="24px" fill="currentColor" viewBox="0 0 256 256">
+              <path d="M224,128a8,8,0,0,1-8,8H59.31l58.35,58.34a8,8,0,0,1-11.32,11.32l-72-72a8,8,0,0,1,0-11.32l72-72a8,8,0,0,1,11.32,11.32L59.31,120H216A8,8,0,0,1,224,128Z"></path>
+            </svg>
+          </div>
+          <h2 id="afterSendInvoiceTitle" class="text-[#111518] text-lg font-bold leading-tight tracking-[-0.015em] flex-1 text-center pr-12">Invoices for Alex Johnson</h2>
+        </div>
+        <div id="pendingInvoicesList">
+            <!-- Pending invoices will be injected here -->
+        </div>
+        <div class="flex items-center gap-4 bg-white px-4 min-h-14">
+          <div class="text-[#111518] flex items-center justify-center rounded-lg bg-[#f0f2f5] shrink-0 size-10" data-icon="Plus" data-size="24px" data-weight="regular">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24px" height="24px" fill="currentColor" viewBox="0 0 256 256">
+              <path d="M224,128a8,8,0,0,1-8,8H136v80a8,8,0,0,1-16,0V136H40a8,8,0,0,1,0-16h80V40a8,8,0,0,1,16,0v80h80A8,8,0,0,1,224,128Z"></path>
+            </svg>
+          </div>
+          <p class="text-[#111518] text-base font-normal leading-normal flex-1 truncate">Add another invoice for this job</p>
+        </div>
+      </div>
+      <div>
+        <div class="flex px-4 py-3">
+          <button
+            id="sendAllInvoicesBtn"
+            class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-full h-12 px-5 flex-1 bg-[#0b80ee] text-white text-base font-bold leading-normal tracking-[0.015em]"
+          >
+            <span class="truncate">Send all invoices to office</span>
+          </button>
+        </div>
+        <div class="h-5 bg-white"></div>
+      </div>
+    </div>
+    </div>
+
+    <!-- Modals -->
+    <div id="confirmationModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">Confirm Action</h2>
+                <span class="close-button">&times;</span>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to proceed?</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary-stitch cancel-btn">Cancel</button>
+                <button class="btn-primary-stitch confirm-btn">Confirm</button>
+            </div>
+        </div>
+    </div>
+    <div id="addJobModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Add New Job Manually</h2>
+                <span class="close-button" id="closeAddJobModal">&times;</span>
+            </div>
+            <form id="newJobForm" class="space-y-4">
+                <div>
+                    <label for="jobCustomer" class="form-label">Customer Name</label>
+                    <input type="text" id="jobCustomer" class="form-input" placeholder="e.g., John Doe" required>
+                </div>
+                <div>
+                    <label for="jobAddress" class="form-label">Address</label>
+                    <input type="text" id="jobAddress" class="form-input" placeholder="e.g., 123 Main St, Anytown, CA" required>
+                </div>
+                <div>
+                    <label for="jobIssue" class="form-label">Issue Reported</label>
+                    <textarea id="jobIssue" class="form-input" placeholder="e.g., Garage door won't open, noisy motor" rows="3" required></textarea>
+                </div>
+                <div>
+                    <label for="jobPhone" class="form-label">Phone Number</label>
+                    <input type="tel" id="jobPhone" class="form-input" placeholder="e.g., (555) 123-4567">
+                </div>
+                <div class="flex justify-end space-x-3 pt-2">
+                    <button type="button" id="cancelAddJob" class="btn-secondary-stitch bg-slate-200 text-slate-700 border-slate-300 hover:bg-slate-300">Cancel</button>
+                    <button type="submit" id="saveJobButton" class="btn-primary-stitch">Save Job</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <div id="editTechnicianModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTechName">Edit Technician</h2>
+                <span class="close-button" id="closeEditTechModal">&times;</span>
+            </div>
+            <form id="editTechForm" class="space-y-4">
+                <input type="hidden" id="modalTechId">
+                <div>
+                    <label for="modalTechStatus" class="form-label">Status</label>
+                    <select id="modalTechStatus" class="form-input">
+                        <option value="Online">Online</option>
+                        <option value="Offline">Offline</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="modalTechLocation" class="form-label">Current Location / Starting Point</label>
+                    <input type="text" id="modalTechLocation" class="form-input" placeholder="e.g., 123 Main St, Los Angeles, CA">
+                </div>
+                <div>
+                    <label for="modalTechMaxJobs" class="form-label">Max Jobs Per Day</label>
+                    <input type="number" id="modalTechMaxJobs" class="form-input" placeholder="e.g., 5" min="0">
+                </div>
+                <div class="flex justify-end space-x-3 pt-2">
+                    <button type="button" id="cancelEditTech" class="btn-secondary-stitch bg-slate-200 text-slate-700 border-slate-300 hover:bg-slate-300">Cancel</button>
+                    <button type="submit" class="btn-primary-stitch">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <div id="addPartModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header"><h2>Add New Inventory Part</h2><span class="close-button" id="closeAddPartModal">&times;</span></div>
+            <form id="newPartForm" class="space-y-4">
+                <input type="hidden" id="partEditId">
+                <div><label for="partName" class="form-label">Part Name</label><input type="text" id="partName" class="form-input" placeholder="e.g., Torsion Spring 2-inch" required></div>
+                <div><label for="partSKU" class="form-label">SKU / Part Number</label><input type="text" id="partSKU" class="form-input" placeholder="e.g., TS-002-HD" required></div>
+                <div><label for="partCategory" class="form-label">Category</label><input type="text" id="partCategory" class="form-input" placeholder="e.g., Springs, Cables, Openers"></div>
+                <div><label for="partSupplier" class="form-label">Supplier</label><input type="text" id="partSupplier" class="form-input" placeholder="e.g., SpringMaster Inc."></div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div><label for="partStock" class="form-label">Initial Stock</label><input type="number" id="partStock" class="form-input" value="0" min="0" required></div>
+                    <div><label for="partReorderLevel" class="form-label">Reorder Level</label><input type="number" id="partReorderLevel" class="form-input" value="5" min="0" required></div>
+                </div>
+                <div><label for="partUnitCost" class="form-label">Unit Cost (USD)</label><input type="number" step="0.01" id="partUnitCost" class="form-input" placeholder="e.g., 25.50" min="0" required></div>
+                <div class="flex justify-end space-x-3 pt-2"><button type="button" id="cancelAddPart" class="btn-secondary-stitch bg-slate-200 text-slate-700 border-slate-300 hover:bg-slate-300">Cancel</button><button type="submit" id="savePartButton" class="btn-primary-stitch">Add Part</button></div>
+            </form>
+        </div>
+    </div>
+    <div id="logPartUsageModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header"><h2>Log Part Usage</h2><span class="close-button" id="closeLogPartUsageModal">&times;</span></div>
+            <form id="logPartUsageForm" class="space-y-4">
+                <div>
+                    <label for="usagePartSKU" class="form-label">Part SKU / Name</label>
+                    <input type="text" id="usagePartSKU" class="form-input" placeholder="Search SKU or Name..." list="inventoryPartsList" required>
+                    <datalist id="inventoryPartsList"></datalist>
+                </div>
+                <div><label for="usageQuantity" class="form-label">Quantity Used</label><input type="number" id="usageQuantity" class="form-input" value="1" min="1" required></div>
+                <div>
+                    <label for="usageTechnician" class="form-label">Technician</label>
+                    <select id="usageTechnician" class="form-input" required>
+                        <option value="">Select Technician</option>
+                    </select>
+                </div>
+                <div><label for="usageJobId" class="form-label">Associated Job ID (Optional)</label><input type="text" id="usageJobId" class="form-input" placeholder="e.g., SW1234 (from jobs list)"></div>
+                <div class="flex justify-end space-x-3 pt-2"><button type="button" id="cancelLogPartUsage" class="btn-secondary-stitch bg-slate-200 text-slate-700 border-slate-300 hover:bg-slate-300">Cancel</button><button type="submit" class="btn-primary-stitch">Log Usage</button></div>
+            </form>
+        </div>
+    </div>
+    <div id="scheduleJobModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Schedule Job</h2>
+                <span class="close-button" id="closeScheduleJobModal">&times;</span>
+            </div>
+            <form id="scheduleJobForm" class="space-y-4">
+                <input type="hidden" id="modalScheduleJobId">
+                <div>
+                    <p><strong>Customer:</strong> <span id="modalScheduleCustomer"></span></p>
+                    <p><strong>Address:</strong> <span id="modalScheduleAddress"></span></p>
+                    <p><strong>Issue:</strong> <span id="modalScheduleIssue"></span></p>
+                    <p><strong>Warranty Provider:</strong> <span id="modalScheduleWarrantyProvider"></span></p>
+                    <p><strong>Plan Type:</strong> <span id="modalSchedulePlanType"></span></p>
+                    <p><strong>Dispatch/PO Number:</strong> <span id="modalScheduleDispatchOrPoNumber"></span></p>
+                </div>
+                <div>
+                    <label for="modalJobDate" class="form-label">Select Date</label>
+                    <input type="date" id="modalJobDate" class="form-input" required>
+                </div>
+                <div>
+                    <label for="modalJobTimeSlot" class="form-label">Select Time Slot</label>
+                    <select id="modalJobTimeSlot" class="form-input" required>
+                        <option value="">Select a time slot...</option>
+                        <option value="8am to 2pm">8am to 2pm</option>
+                        <option value="9am to 4pm">9am to 4pm</option>
+                        <option value="12pm to 6pm">12pm to 6pm</option>
+                    </select>
+                </div>
+                <div class="flex justify-end space-x-3 pt-2">
+                    <button type="button" id="cancelScheduleJob" class="btn-secondary-stitch bg-slate-200 text-slate-700 border-slate-300 hover:bg-slate-300">Cancel</button>
+                    <button type="submit" class="btn-primary-stitch">Confirm Schedule</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.0.0/dist/signature_pad.umd.min.js"></script>
+    <script src="app.js"></script>
+
+    <div id="warrantyDetailModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalJobTitle">Invoice & Job Details</h2>
+                <span class="close-button">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- Customer Info Card -->
+                    <div class="bg-slate-50 p-4 rounded-lg border">
+                        <h3 class="font-semibold text-slate-800 mb-3 text-base border-b pb-2">Customer Information</h3>
+                        <div class="space-y-3 text-sm">
+                            <div class="flex items-center"><span class="material-icons-outlined text-slate-500 mr-3">person</span><span id="modalWarrantyCustomerName">N/A</span></div>
+                            <div class="flex items-center"><span class="material-icons-outlined text-slate-500 mr-3">home</span><span id="modalWarrantyAddress">N/A</span></div>
+                            <div class="flex items-center"><span class="material-icons-outlined text-slate-500 mr-3">phone</span><span id="modalWarrantyPhone">N/A</span></div>
+                        </div>
+                    </div>
+                    <!-- Job Details Card -->
+                    <div class="bg-slate-50 p-4 rounded-lg border">
+                        <h3 class="font-semibold text-slate-800 mb-3 text-base border-b pb-2">Job Details</h3>
+                        <div class="space-y-3 text-sm">
+                            <div class="flex items-center"><span class="material-icons-outlined text-slate-500 mr-3">event</span><span id="modalWarrantyCompletionDate">N/A</span></div>
+                            <div class="flex items-center"><span class="material-icons-outlined text-slate-500 mr-3">badge</span><span id="modalWarrantyTechnician">N/A</span></div>
+                            <div class="flex items-center"><span class="material-icons-outlined text-slate-500 mr-3">confirmation_number</span><span id="modalWarrantyDispatchOrPoNumber">N/A</span></div>
+                        </div>
+                    </div>
+                    <!-- Warranty & Plan Card -->
+                    <div class="bg-slate-50 p-4 rounded-lg border md:col-span-2">
+                         <h3 class="font-semibold text-slate-800 mb-3 text-base border-b pb-2">Warranty & Plan</h3>
+                         <div class="grid grid-cols-2 gap-4 text-sm">
+                            <div><strong>Provider:</strong> <span id="modalWarrantyProvider">N/A</span></div>
+                            <div><strong>Plan Type:</strong> <span id="modalWarrantyPlanType">N/A</span></div>
+                         </div>
+                    </div>
+                </div>
+                <hr class="my-6">
+                <h3 class="text-lg font-semibold mb-2">Associated Invoices</h3>
+                <div id="modalWarrantyInvoicesContainer" class="space-y-2"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary-stitch close-button">Close</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Fullscreen Claims Processing Workspace -->
+    <div id="providerInvoiceListOverlay" class="fullscreen-overlay">
+        <div id="fullscreenCloseBtn" class="fullscreen-close-btn">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+        </div>
+        <div class="w-full max-w-6xl mx-auto">
+            <h2 id="providerModalTitle" class="text-3xl font-bold text-slate-800">Provider Claims</h2>
+            <div class="mt-4 p-4 bg-white rounded-lg shadow-md">
+                <label for="claimsEmailInput" class="block text-sm font-medium text-gray-700">Claims Submission Email</label>
+                <input type="email" id="claimsEmailInput" class="mt-1 block w-full md:w-1/3 rounded-md border-gray-300 shadow-sm focus:border-green-500 focus:ring-green-500 sm:text-sm" placeholder="claims@example.com">
+            </div>
+            <div id="claimsWorkspace" class="claims-workspace">
+                <div class="claims-column">
+                    <div class="claims-column-header">
+                        <h3>Unclaimed Invoices</h3>
+                        <button id="processAllBtn" class="bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-1 px-3 rounded-md hidden">Process All</button>
+                    </div>
+                    <div id="unclaimedInvoicesList" class="invoice-card-list"></div>
+                </div>
+                <div class="claims-column">
+                    <div class="claims-column-header"><h3>Claimed Invoices</h3></div>
+                    <div id="claimedInvoicesList" class="invoice-card-list"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Fullscreen Invoice Detail Overlay -->
+    <div id="invoiceDetailOverlay" class="fullscreen-overlay">
+        <div id="invoiceDetailCloseBtn" class="fullscreen-close-btn">
+             <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+        </div>
+        <div id="invoiceDetailContent" class="w-full max-w-4xl mx-auto bg-white p-8 rounded-lg shadow-lg">
+            <!-- Content will be injected here by JavaScript -->
+        </div>
+    </div>
+    
+    <!-- Fullscreen "All Jobs" Overlay -->
+    <div id="allJobsOverlay" class="fullscreen-overlay">
+        <div id="allJobsCloseBtn" class="fullscreen-close-btn">
+             <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+        </div>
+        <div class="w-full max-w-6xl mx-auto">
+            <h2 id="allJobsTitle" class="text-3xl font-bold text-slate-800">All Completed Jobs</h2>
+            <div class="mt-4 mb-6">
+                <input type="text" id="jobsSearchInput" placeholder="Search by customer, address, or PO..." class="p-2 border border-slate-300 rounded-md w-full md:w-1/2">
+            </div>
+            <div class="bg-white rounded-lg shadow-md overflow-x-auto">
+                <table id="allJobsTable" class="custom-table">
+                    <thead><tr><th>Customer</th><th>Address</th><th>Completion Date</th><th>Technician</th><th>Actions</th></tr></thead>
+                    <tbody id="allJobsTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Fullscreen Technician Selection Overlay -->
+    <div id="technicianSelectionOverlay" class="fullscreen-overlay">
+        <div id="technicianSelectionCloseBtn" class="fullscreen-close-btn">
+             <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+        </div>
+        <div class="w-full max-w-4xl mx-auto">
+            <h2 class="text-3xl font-bold text-slate-800 text-center">View Invoices By Technician</h2>
+            <div id="technicianSelectionCards" class="mt-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <!-- Technician cards will be injected here -->
+            </div>
+        </div>
+    </div>
+</body>
+</html>
