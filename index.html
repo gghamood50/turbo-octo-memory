@@ -823,37 +823,48 @@
         </div>
     </div>
     <div id="scheduleJobModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>Schedule Job</h2>
+        <div class="modal-content bg-slate-50 shadow-2xl border-2 border-slate-200 !p-0">
+            <div class="modal-header bg-white px-6 py-4 rounded-t-lg border-b">
+                <h2 class="text-xl font-bold text-slate-800">View/Schedule Job</h2>
                 <span class="close-button" id="closeScheduleJobModal">&times;</span>
             </div>
-            <form id="scheduleJobForm" class="space-y-4">
+            <form id="scheduleJobForm" class="p-6 space-y-5">
                 <input type="hidden" id="modalScheduleJobId">
-                <div>
-                    <p><strong>Customer:</strong> <span id="modalScheduleCustomer"></span></p>
-                    <p><strong>Address:</strong> <span id="modalScheduleAddress"></span></p>
-                    <p><strong>Issue:</strong> <span id="modalScheduleIssue"></span></p>
-                    <p><strong>Warranty Provider:</strong> <span id="modalScheduleWarrantyProvider"></span></p>
-                    <p><strong>Plan Type:</strong> <span id="modalSchedulePlanType"></span></p>
-                    <p><strong>Dispatch/PO Number:</strong> <span id="modalScheduleDispatchOrPoNumber"></span></p>
+                
+                <!-- Job Details Section -->
+                <div class="space-y-3 p-4 bg-white border border-slate-200 rounded-lg">
+                    <h3 class="text-lg font-semibold text-slate-700 border-b pb-2 mb-3">Job Details</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2 text-sm">
+                        <p><strong>Customer:</strong> <span id="modalScheduleCustomer"></span></p>
+                        <p><strong>Address:</strong> <span id="modalScheduleAddress"></span></p>
+                        <p class="md:col-span-2"><strong>Issue:</strong> <span id="modalScheduleIssue"></span></p>
+                        <p><strong>Warranty:</strong> <span id="modalScheduleWarrantyProvider"></span></p>
+                        <p><strong>Plan:</strong> <span id="modalSchedulePlanType"></span></p>
+                        <p class="md:col-span-2"><strong>PO Number:</strong> <span id="modalScheduleDispatchOrPoNumber"></span></p>
+                    </div>
                 </div>
-                <div>
-                    <label for="modalJobDate" class="form-label">Select Date</label>
-                    <input type="date" id="modalJobDate" class="form-input" required>
+
+                <!-- Scheduling Section -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-5 pt-4">
+                    <div>
+                        <label for="modalJobDate" class="form-label">Select Date</label>
+                        <input type="date" id="modalJobDate" class="form-input" required>
+                    </div>
+                    <div>
+                        <label for="modalJobTimeSlot" class="form-label">Select Time Slot</label>
+                        <select id="modalJobTimeSlot" class="form-input" required>
+                            <option value="">Select a time slot...</option>
+                            <option value="8am to 2pm">8am to 2pm</option>
+                            <option value="9am to 4pm">9am to 4pm</option>
+                            <option value="12pm to 6pm">12pm to 6pm</option>
+                        </select>
+                    </div>
                 </div>
-                <div>
-                    <label for="modalJobTimeSlot" class="form-label">Select Time Slot</label>
-                    <select id="modalJobTimeSlot" class="form-input" required>
-                        <option value="">Select a time slot...</option>
-                        <option value="8am to 2pm">8am to 2pm</option>
-                        <option value="9am to 4pm">9am to 4pm</option>
-                        <option value="12pm to 6pm">12pm to 6pm</option>
-                    </select>
-                </div>
-                <div class="flex justify-end space-x-3 pt-2">
-                    <button type="button" id="cancelScheduleJob" class="btn-secondary-stitch bg-slate-200 text-slate-700 border-slate-300 hover:bg-slate-300">Cancel</button>
-                    <button type="submit" class="btn-primary-stitch">Confirm Schedule</button>
+
+                <!-- Modal Footer Buttons -->
+                <div class="flex justify-end space-x-4 pt-4">
+                    <button type="button" id="cancelScheduleJob" class="btn-secondary-stitch bg-white text-slate-700 border-slate-300 hover:bg-slate-100 px-5 py-2">Cancel</button>
+                    <button type="submit" class="btn-primary-stitch px-5 py-2">Confirm Schedule</button>
                 </div>
             </form>
         </div>
