@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Schedule Your Service - Safeway Garage Solutions</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .time-slot-btn {
+            transition: all 0.2s ease-in-out;
+        }
+        .time-slot-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+        .time-slot-btn.selected {
+            background-color: #059669; /* green-600 */
+            color: white;
+            border-color: #059669;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+        #confirmationScreen, #successScreen, #errorScreen {
+            display: none;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 flex items-center justify-center min-h-screen p-4">
+
+    <div id="mainCard" class="w-full max-w-lg bg-white rounded-xl shadow-lg p-8">
+        <!-- Header -->
+        <div class="flex items-center justify-center mb-6 pb-4 border-b border-slate-200">
+            <div class="size-10 text-green-700 mr-3">
+                <svg fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg"><path clip-rule="evenodd" d="M24 4H6V17.3333V30.6667H24V44H42V30.6667V17.3333H24V4Z" fill="currentColor" fill-rule="evenodd"></path></svg>
+            </div>
+            <h1 class="text-2xl font-bold text-slate-800">Safeway Garage Solutions</h1>
+        </div>
+
+        <!-- Loading State -->
+        <div id="loadingScreen" class="text-center">
+            <p class="text-slate-600">Loading your appointment details...</p>
+        </div>
+
+        <!-- Scheduling Screen -->
+        <div id="schedulingScreen" class="hidden">
+            <h2 class="text-xl font-semibold text-slate-800 text-center">Confirm Your Appointment</h2>
+            <div class="mt-4 bg-slate-100 p-4 rounded-lg text-slate-700">
+                <p><strong>Customer:</strong> <span id="customerName"></span></p>
+                <p><strong>Service Address:</strong> <span id="serviceAddress"></span></p>
+            </div>
+            <p class="text-slate-600 mt-6 mb-4 text-center">Please select a preferred time slot for your service:</p>
+            <div id="timeSlotsContainer" class="grid grid-cols-1 gap-4">
+                <button data-slot="8am to 2pm" class="time-slot-btn w-full text-left p-4 border rounded-lg font-medium">8:00 AM - 2:00 PM</button>
+                <button data-slot="9am to 4pm" class="time-slot-btn w-full text-left p-4 border rounded-lg font-medium">9:00 AM - 4:00 PM</button>
+                <button data-slot="12pm to 6pm" class="time-slot-btn w-full text-left p-4 border rounded-lg font-medium">12:00 PM - 6:00 PM</button>
+            </div>
+            <button id="confirmTimeSlotBtn" disabled class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg mt-6 disabled:bg-slate-400 disabled:cursor-not-allowed">
+                Confirm Appointment
+            </button>
+        </div>
+
+        <!-- Confirmation Screen -->
+        <div id="confirmationScreen">
+             <div class="text-center">
+                <h2 class="text-xl font-semibold text-slate-800">Your Appointment is Scheduled!</h2>
+                <div class="mt-4 bg-green-50 text-green-800 p-6 rounded-lg text-center">
+                    <span class="material-icons-outlined text-5xl">task_alt</span>
+                    <p class="font-bold mt-2">Thank You, <span id="confirmedCustomerName"></span>!</p>
+                    <p class="mt-1">Your service for <strong id="confirmedAddress"></strong> is confirmed for the time slot:</p>
+                    <p class="text-2xl font-bold mt-2" id="confirmedTimeSlot"></p>
+                </div>
+                <p class="text-slate-500 text-sm mt-4">We will contact you on the day of service. You can now close this window.</p>
+            </div>
+        </div>
+        
+        <!-- Error Screen -->
+        <div id="errorScreen">
+            <div class="text-center bg-red-50 text-red-700 p-6 rounded-lg">
+                 <span class="material-icons-outlined text-5xl">error_outline</span>
+                <h2 class="text-xl font-semibold mt-2">An Error Occurred</h2>
+                <p id="errorMessage" class="mt-2">Could not load appointment details. This link may be invalid or expired.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
+
+    <script>
+        // --- Firebase Configuration ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyCNjGhWVguIWBAHyyLfTapsF_5Bp6ztRG0",
+            authDomain: "safewayos2.firebaseapp.com",
+            projectId: "safewayos2",
+            storageBucket: "safewayos2.appspot.com",
+            messagingSenderId: "216681158749",
+            appId: "1:216681158749:web:35de32f542ad71fa7295b4"
+        };
+
+        // --- DOM Elements ---
+        const loadingScreen = document.getElementById('loadingScreen');
+        const schedulingScreen = document.getElementById('schedulingScreen');
+        const confirmationScreen = document.getElementById('confirmationScreen');
+        const errorScreen = document.getElementById('errorScreen');
+        const customerNameEl = document.getElementById('customerName');
+        const serviceAddressEl = document.getElementById('serviceAddress');
+        const timeSlotsContainer = document.getElementById('timeSlotsContainer');
+        const confirmTimeSlotBtn = document.getElementById('confirmTimeSlotBtn');
+        
+        let db;
+        let selectedTimeSlot = null;
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                if (!firebase.apps.length) {
+                    firebase.initializeApp(firebaseConfig);
+                }
+                db = firebase.firestore();
+
+                const urlParams = new URLSearchParams(window.location.search);
+                const jobId = urlParams.get('jobId');
+
+                if (!jobId) {
+                    showError("No job ID provided. This link is invalid.");
+                    return;
+                }
+
+                const jobRef = db.collection('jobs').doc(jobId);
+                const jobDoc = await jobRef.get();
+
+                if (!jobDoc.exists) {
+                    showError("This appointment could not be found. It may have been canceled or rescheduled.");
+                    return;
+                }
+
+                const jobData = jobDoc.data();
+
+                if (jobData.status !== 'Needs Scheduling') {
+                    showError(`This appointment has already been scheduled for ${jobData.scheduledDate || 'a future date'}.`);
+                    return;
+                }
+
+                // Populate the UI
+                customerNameEl.textContent = jobData.customer || 'Valued Customer';
+                serviceAddressEl.textContent = jobData.address || 'N/A';
+                
+                loadingScreen.style.display = 'none';
+                schedulingScreen.style.display = 'block';
+
+                // Add event listeners
+                timeSlotsContainer.addEventListener('click', (e) => {
+                    if (e.target.tagName === 'BUTTON') {
+                        // Remove 'selected' from all buttons
+                        timeSlotsContainer.querySelectorAll('.time-slot-btn').forEach(btn => btn.classList.remove('selected'));
+                        // Add 'selected' to the clicked button
+                        e.target.classList.add('selected');
+                        selectedTimeSlot = e.target.dataset.slot;
+                        confirmTimeSlotBtn.disabled = false;
+                    }
+                });
+
+                confirmTimeSlotBtn.addEventListener('click', async () => {
+                    if (!selectedTimeSlot) {
+                        alert("Please select a time slot.");
+                        return;
+                    }
+
+                    confirmTimeSlotBtn.disabled = true;
+                    confirmTimeSlotBtn.textContent = 'Confirming...';
+
+                    try {
+                        const today = new Date();
+                        const scheduledDate = today.toISOString().split('T')[0]; // YYYY-MM-DD format
+
+                        await jobRef.update({
+                            status: 'Scheduled',
+                            timeSlot: selectedTimeSlot,
+                            scheduledDate: scheduledDate
+                        });
+                        
+                        showConfirmation(jobData.customer, jobData.address, selectedTimeSlot);
+
+                    } catch (error) {
+                        console.error("Error updating job:", error);
+                        showError("There was a problem confirming your appointment. Please try again.");
+                        confirmTimeSlotBtn.disabled = false;
+                        confirmTimeSlotBtn.textContent = 'Confirm Appointment';
+                    }
+                });
+
+            } catch (error) {
+                console.error("Initialization or fetch error:", error);
+                showError("Could not connect to the scheduling service. Please check your internet connection.");
+            }
+        });
+
+        function showError(message) {
+            loadingScreen.style.display = 'none';
+            schedulingScreen.style.display = 'none';
+            confirmationScreen.style.display = 'none';
+            document.getElementById('errorMessage').textContent = message;
+            errorScreen.style.display = 'block';
+        }
+        
+        function showConfirmation(customer, address, slot) {
+            document.getElementById('confirmedCustomerName').textContent = customer;
+            document.getElementById('confirmedAddress').textContent = address;
+            document.getElementById('confirmedTimeSlot').textContent = slot;
+            schedulingScreen.style.display = 'none';
+            confirmationScreen.style.display = 'block';
+        }
+
+    </script>
+</body>
+</html>
