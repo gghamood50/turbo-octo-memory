@@ -1509,6 +1509,9 @@ document.addEventListener('DOMContentLoaded', () => {
             address: document.getElementById('jobAddress').value,
             issue: document.getElementById('jobIssue').value,
             phone: document.getElementById('jobPhone').value,
+            warrantyProvider: document.getElementById('jobWarrantyProvider').value,
+            planType: document.getElementById('jobPlanType').value,
+            dispatchOrPoNumber: document.getElementById('jobDispatchOrPoNumber').value,
             status: 'Needs Scheduling',
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
         };
