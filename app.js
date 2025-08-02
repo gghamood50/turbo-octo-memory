@@ -1504,14 +1504,15 @@ document.addEventListener('DOMContentLoaded', () => {
         if (saveJobButton.disabled) return;
         saveJobButton.disabled = true;
         saveJobButton.textContent = 'Saving...';
+        const form = e.currentTarget;
         const jobData = {
-            customer: document.getElementById('jobCustomer').value,
-            address: document.getElementById('jobAddress').value,
-            issue: document.getElementById('jobIssue').value,
-            phone: document.getElementById('jobPhone').value,
-            warrantyProvider: document.getElementById('jobWarrantyProvider').value,
-            planType: document.getElementById('jobPlanType').value,
-            dispatchOrPoNumber: document.getElementById('jobDispatchOrPoNumber').value,
+            customer: form.querySelector('#jobCustomer').value,
+            address: form.querySelector('#jobAddress').value,
+            issue: form.querySelector('#jobIssue').value,
+            phone: form.querySelector('#jobPhone').value,
+            warrantyProvider: form.querySelector('#jobWarrantyProvider').value,
+            planType: form.querySelector('#jobPlanType').value,
+            dispatchOrPoNumber: form.querySelector('#jobDispatchOrPoNumber').value,
             status: 'Needs Scheduling',
             createdAt: firebase.firestore.FieldValue.serverTimestamp()
         };
