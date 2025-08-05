@@ -2595,7 +2595,8 @@ async function showInvoiceScreen(jobId) {
 }
 
 function generatePDF(invoiceDataForPdf) {
-    console.log("[generatePDF] Starting PDF generation for invoice:", invoiceDataForPdf ? invoiceDataForPdf.invoiceNumber : "Unknown");
+    console.log("[generatePDF] Starting PDF generation for invoice:", invoiceDataForPdf.invoiceNumber);
+    console.log("[generatePDF] Data received:", invoiceDataForPdf);
     if (!invoiceDataForPdf) {
         console.error('[generatePDF] No invoice data provided.');
         return null;
@@ -2607,147 +2608,232 @@ function generatePDF(invoiceDataForPdf) {
         const pageHeight = doc.internal.pageSize.height;
         const pageWidth = doc.internal.pageSize.width;
         const margin = 15;
-        const contentWidth = pageWidth - (2 * margin);
-        let yPos = 5;
+        let yPos = margin;
 
-        // --- HEADER SECTION ---
-        // NOTE: This assumes you have a logoBase64Data variable defined somewhere in your script.
-        // If not, it will just add space.
-        const logoBase64Data = ""; // PASTE YOUR BASE64 LOGO DATA HERE if you have one.
+        // --- STYLING CONSTANTS ---
+        const BRAND_COLOR = '#059669'; // Tailwind's green-600
+        const HEADING_COLOR = '#1E293B'; // slate-800
+        const TEXT_COLOR = '#334155'; // slate-700
+        const LIGHT_TEXT_COLOR = '#64748B'; // slate-500
+
+        // --- HEADER ---
+        // PASTE YOUR BASE64 LOGO DATA HERE
+        const logoBase64Data = ""; 
         if (logoBase64Data) {
             try {
-                const logoDisplayWidth = 50;
-                const logoX = (pageWidth - logoDisplayWidth) / 2;
-                doc.addImage(logoBase64Data, 'PNG', logoX, yPos, logoDisplayWidth, 0);
-                yPos += (doc.getImageProperties(logoBase64Data).height * logoDisplayWidth / doc.getImageProperties(logoBase64Data).width) + 5;
+                // The logo's vertical position is set to -25 as requested.
+                doc.addImage(logoBase64Data, 'PNG', margin, -25, 50, 0); 
+                yPos += 15;
             } catch (e) {
-                console.error("[generatePDF] Error adding logo image:", e);
-                yPos += 10;
+                 console.error("Error adding logo image:", e);
             }
-        } else {
-            yPos += 10;
         }
-
-        doc.setFontSize(10);
-        doc.setFont("helvetica", "bold");
-        doc.text("Safeway Garage Doors", pageWidth / 2, yPos, { align: 'center' });
-        yPos += 5;
-        doc.setFontSize(9);
-        doc.setFont("helvetica", "normal");
-        doc.text("2921 W. Central Ave. Unit C, Santa Ana, CA 92704 | Lic. # 821771", pageWidth / 2, yPos, { align: 'center' });
-        yPos += 5;
-        doc.text("(714) 414-7979 | (805) 201-5815 | (800) 810-3246", pageWidth / 2, yPos, { align: 'center' });
-        yPos += 15;
-
-        // --- BILLING AND INVOICE DETAILS ---
-        const billToY = yPos;
-        let detailsY = yPos;
-
-        doc.setFontSize(10);
-        doc.setFont("helvetica", "bold");
-        doc.text("BILL TO:", margin, billToY);
-        yPos += 5;
-        doc.setFont("helvetica", "normal");
-        doc.text(String(invoiceDataForPdf.customerName || "N/A"), margin, yPos);
-        yPos += 5;
-        if (invoiceDataForPdf.customerAddress) {
-            const addressLines = doc.splitTextToSize(String(invoiceDataForPdf.customerAddress), contentWidth / 2 - 5);
-            doc.text(addressLines, margin, yPos);
-            yPos += (addressLines.length * 4.5);
-        }
-        if (invoiceDataForPdf.customerPhone) {
-            doc.text(`Phone: ${invoiceDataForPdf.customerPhone}`, margin, yPos);
-        }
-
-        let rightColX = pageWidth - margin - 70;
-        doc.setFontSize(18);
-        doc.setFont("helvetica", "bold");
-        doc.text("INVOICE", rightColX, detailsY, { align: 'left' });
-        detailsY += 8;
-
-        doc.setFontSize(10);
-        doc.setFont("helvetica", "bold");
-        doc.text("Invoice #:", rightColX, detailsY);
-        doc.setFont("helvetica", "normal");
-        doc.text(String(invoiceDataForPdf.invoiceNumber || "N/A"), rightColX + 30, detailsY);
-        detailsY += 6;
-
-        doc.setFont("helvetica", "bold");
-        doc.text("Date:", rightColX, detailsY);
-        doc.setFont("helvetica", "normal");
-        doc.text(invoiceDataForPdf.invoiceDate ? new Date(invoiceDataForPdf.invoiceDate + 'T00:00:00').toLocaleDateString() : "N/A", rightColX + 30, detailsY);
-        detailsY += 6;
         
-        yPos = Math.max(yPos, detailsY) + 10;
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        doc.setTextColor(TEXT_COLOR);
+        doc.text("2921 W. Central Ave. Unit C, Santa Ana, CA 92704 | Lic. # 821771", margin, yPos);
+        yPos += 4;
+        doc.setTextColor(LIGHT_TEXT_COLOR);
+        doc.text("(714) 414-7979 | (805) 201-5815 | (800) 810-3246 | (949) 899-3560 | (310) 903-0212", margin, yPos);
+
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(22);
+        doc.setTextColor(HEADING_COLOR);
+        doc.text("INVOICE", pageWidth - margin, margin, { align: 'right' });
+        
+        yPos += 10;
+        doc.setDrawColor(BRAND_COLOR);
+        doc.setLineWidth(0.5);
+        doc.line(margin, yPos, pageWidth - margin, yPos);
+        yPos += 10;
+
+        // --- BILL TO & INVOICE DETAILS ---
+        const detailsX = pageWidth / 2 + 10;
+        
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(10);
+        doc.setTextColor(HEADING_COLOR);
+        doc.text("BILL TO", margin, yPos);
+        doc.text("INVOICE DETAILS", detailsX, yPos);
+
+        yPos += 5;
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(TEXT_COLOR);
+        doc.text(invoiceDataForPdf.customerName || "N/A", margin, yPos);
+        doc.text(`Invoice #: ${invoiceDataForPdf.invoiceNumber || "N/A"}`, detailsX, yPos);
+        yPos += 5;
+        
+        const addressLines = doc.splitTextToSize(invoiceDataForPdf.customerAddress || "N/A", (pageWidth / 2) - margin * 2);
+        doc.text(addressLines, margin, yPos);
+        
+        doc.text(`Date: ${new Date(invoiceDataForPdf.invoiceDate + 'T00:00:00').toLocaleDateString()}`, detailsX, yPos);
+        yPos += 5;
+
+        const emailY = yPos + (addressLines.length - 1) * 5;
+        doc.text(invoiceDataForPdf.customerEmail || "N/A", margin, emailY);
+        doc.text(`P.O. #: ${invoiceDataForPdf.poNumber || "N/A"}`, detailsX, yPos);
+        yPos += 5;
+
+        const phoneY = yPos + (addressLines.length - 1) * 5;
+        doc.text(invoiceDataForPdf.customerPhone || "N/A", margin, phoneY);
+        let paymentString = `Payment: ${invoiceDataForPdf.paymentMethod || "N/A"}`;
+        if (invoiceDataForPdf.paymentMethod === 'Cheque' && invoiceDataForPdf.chequeNumber) {
+            paymentString += ` (#${invoiceDataForPdf.chequeNumber})`;
+        }
+        doc.text(paymentString, detailsX, yPos);
+        yPos += 5;
+
+        doc.text(`County Tax: ${invoiceDataForPdf.selectedCountyTax || "N/A"}`, detailsX, yPos);
+
+        yPos = Math.max(emailY, phoneY, yPos) + 5;
+
+        // --- JOB & WARRANTY DETAILS ---
+        yPos += 5;
+        doc.setDrawColor('#E2E8F0'); // slate-200
+        doc.setLineWidth(0.2);
+        doc.line(margin, yPos, pageWidth - margin, yPos);
+        yPos += 8;
+
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(HEADING_COLOR);
+        doc.text("JOB DETAILS", margin, yPos);
+        yPos += 5;
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(TEXT_COLOR);
+        doc.text(`Warranty Provider: ${invoiceDataForPdf.warrantyName || "N/A"}`, margin, yPos);
+        doc.text(`Plan Type: ${invoiceDataForPdf.planType || "N/A"}`, detailsX, yPos);
+        yPos += 5;
+        doc.text(`Equipment: ${invoiceDataForPdf.typeOfEquipment || "N/A"}`, margin, yPos);
+        yPos += 10;
 
         // --- ITEMS TABLE ---
-        const tableBody = invoiceDataForPdf.items && invoiceDataForPdf.items.length > 0 ? invoiceDataForPdf.items.map(item => [
+        const tableBody = invoiceDataForPdf.items.map(item => [
             item.description || "",
             item.quantity || 0,
-            (item.price || 0).toFixed(2),
-            (item.total || 0).toFixed(2)
-        ]) : [["No items listed.", "", "", ""]];
-
+            `$${(item.price || 0).toFixed(2)}`,
+            `$${(item.total || 0).toFixed(2)}`
+        ]);
         doc.autoTable({
             startY: yPos,
-            head: [['Description', 'Qty', 'Unit Price', 'Total']],
+            head: [['Description', 'Quantity', 'Unit Price', 'Total']],
             body: tableBody,
-            theme: 'grid',
-            headStyles: { fillColor: [67, 136, 67] }, // A green color
-            styles: { fontSize: 9 },
-            margin: { left: margin, right: margin },
+            theme: 'striped',
+            headStyles: { fillColor: HEADING_COLOR, textColor: '#FFFFFF' },
+            styles: { fontSize: 9, cellPadding: 2.5 },
+            columnStyles: {
+                1: { halign: 'center' },
+                2: { halign: 'right' },
+                3: { halign: 'right' }
+            },
+            margin: { left: margin, right: margin }
         });
-        yPos = doc.lastAutoTable.finalY;
+        yPos = doc.lastAutoTable.finalY + 5;
 
-        // --- TOTALS SECTION ---
-        let totalsY = yPos + 7;
-        const totalsXLabel = pageWidth - margin - 60;
-        const totalsXValue = pageWidth - margin - 5;
-        doc.setFontSize(10);
-        doc.setFont("helvetica", "normal");
-        doc.text("Subtotal:", totalsXLabel, totalsY, {align: 'left'});
-        doc.text((invoiceDataForPdf.subtotal || 0).toFixed(2), totalsXValue, totalsY, {align: 'right'});
-        totalsY += 6;
-        doc.text("Labor:", totalsXLabel, totalsY, {align: 'left'});
-        doc.text((invoiceDataForPdf.labor || 0).toFixed(2), totalsXValue, totalsY, {align: 'right'});
-        totalsY += 6;
-        doc.text("Service Call:", totalsXLabel, totalsY, {align: 'left'});
-        doc.text((invoiceDataForPdf.serviceCall || 0).toFixed(2), totalsXValue, totalsY, {align: 'right'});
-        totalsY += 6;
-        doc.text(`Sales Tax (${invoiceDataForPdf.salesTaxRate || 0}%):`, totalsXLabel, totalsY, {align: 'left'});
-        doc.text((invoiceDataForPdf.salesTaxAmount || 0).toFixed(2), totalsXValue, totalsY, {align: 'right'});
-        totalsY += 8;
-        doc.setFontSize(11);
-        doc.setFont("helvetica", "bold");
-        doc.text("Total Due:", totalsXLabel, totalsY, {align: 'left'});
-        doc.text(formatCurrency(invoiceDataForPdf.total), totalsXValue, totalsY, {align: 'right'});
+        // --- DESCRIPTIONS & TOTALS ---
+        let leftColumnY = yPos;
+        const rightColumnX = pageWidth - margin;
+
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(HEADING_COLOR);
+        doc.text('Job Description', margin, leftColumnY);
+        leftColumnY += 5;
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(TEXT_COLOR);
+        const descLines = doc.splitTextToSize(invoiceDataForPdf.jobDescription, (pageWidth / 2) - margin);
+        doc.text(descLines, margin, leftColumnY);
+        leftColumnY += (descLines.length * 5) + 5;
+
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(HEADING_COLOR);
+        doc.text('Recommendations', margin, leftColumnY);
+        leftColumnY += 5;
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(TEXT_COLOR);
+        const recLines = doc.splitTextToSize(invoiceDataForPdf.recommendations, (pageWidth / 2) - margin);
+        doc.text(recLines, margin, leftColumnY);
+        leftColumnY += (recLines.length * 5) + 5;
         
-        yPos = totalsY + 10;
-
-        // --- SIGNATURE SECTION ---
-        if (invoiceDataForPdf.signatureDataURL) {
-            yPos = yPos > pageHeight - 50 ? (doc.addPage(), margin) : yPos; // Add page if not enough space
-            doc.setFontSize(10);
-            doc.setFont("helvetica", "bold");
-            doc.text("Customer Signature:", margin, yPos);
-            try {
-                doc.addImage(invoiceDataForPdf.signatureDataURL, 'PNG', margin, yPos + 2, 60, 20);
-                if (invoiceDataForPdf.signedBy) {
-                    doc.setFontSize(9);
-                    doc.setFont("helvetica", "normal");
-                    doc.text(`Signed by: ${invoiceDataForPdf.signedBy}`, margin, yPos + 28);
-                }
-            } catch (e) {
-                console.error("Error adding signature image to PDF:", e);
-                doc.text("Signature could not be displayed.", margin, yPos + 5);
-            }
+        if (invoiceDataForPdf.nonCoveredItems) {
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(HEADING_COLOR);
+            doc.text('Non-Covered Items', margin, leftColumnY);
+            leftColumnY += 5;
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(TEXT_COLOR);
+            const nonCovLines = doc.splitTextToSize(invoiceDataForPdf.nonCoveredItems, (pageWidth / 2) - margin);
+            doc.text(nonCovLines, margin, leftColumnY);
+            leftColumnY += (nonCovLines.length * 5);
         }
+
+        const totalsXLabel = rightColumnX - 50;
+        let totalsY = yPos;
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(TEXT_COLOR);
+        doc.text("Subtotal:", totalsXLabel, totalsY, { align: 'right' });
+        doc.text(`$${(invoiceDataForPdf.subtotal || 0).toFixed(2)}`, rightColumnX, totalsY, { align: 'right' });
+        totalsY += 6;
+        doc.text("Labor:", totalsXLabel, totalsY, { align: 'right' });
+        doc.text(`$${(invoiceDataForPdf.labor || 0).toFixed(2)}`, rightColumnX, totalsY, { align: 'right' });
+        totalsY += 6;
+        doc.text("Service Call:", totalsXLabel, totalsY, { align: 'right' });
+        doc.text(`$${(invoiceDataForPdf.serviceCall || 0).toFixed(2)}`, rightColumnX, totalsY, { align: 'right' });
+        totalsY += 6;
+        doc.text(`Sales Tax (${invoiceDataForPdf.salesTaxRate || 0}%):`, totalsXLabel, totalsY, { align: 'right' });
+        doc.text(`$${(invoiceDataForPdf.salesTaxAmount || 0).toFixed(2)}`, rightColumnX, totalsY, { align: 'right' });
+        totalsY += 6;
+        doc.setDrawColor('#E2E8F0');
+        doc.line(totalsXLabel - 2, totalsY, rightColumnX, totalsY);
+        totalsY += 6;
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(12);
+        doc.setTextColor(BRAND_COLOR);
+        doc.text("Total Due:", totalsXLabel, totalsY, { align: 'right' });
+        doc.text(formatCurrency(invoiceDataForPdf.total), rightColumnX, totalsY, { align: 'right' });
+
+        // --- FOOTER, TERMS & SIGNATURE ---
+        let finalY = Math.max(leftColumnY, totalsY, pageHeight - 60); 
+        if (finalY > pageHeight - 60) {
+            doc.addPage();
+            finalY = margin;
+        }
+        
+        doc.setDrawColor('#E2E8F0');
+        doc.line(margin, finalY, pageWidth - margin, finalY);
+        finalY += 8;
+
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(HEADING_COLOR);
+        doc.text("Customer Signature:", margin, finalY);
+
+        if (invoiceDataForPdf.signatureDataURL && invoiceDataForPdf.signatureDataURL !== "placeholder") {
+            try {
+                doc.addImage(invoiceDataForPdf.signatureDataURL, 'PNG', margin, finalY + 2, 50, 15);
+            } catch (e) { console.error("Error adding signature image:", e); }
+        } else if (invoiceDataForPdf.signatureDataURL === "placeholder") {
+            doc.setFont("cursive", "normal");
+            doc.setFontSize(20);
+            doc.text("J. Doe", margin + 2, finalY + 12);
+        }
+        
+        doc.setFontSize(7);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(LIGHT_TEXT_COLOR);
+        const termsText1 = "Payment due upon receipt of invoice. A service charge of $5.00 or 1.5% monthly (whichever is greater) will be charged on all balances over 15 days from date of invoice.";
+        const termsText2 = "Service and Parts Warranty: All new parts described in the invoice are covered by MANUFACTURER'S warranty. Safeway Garage Doors agrees to supply said in-warranty parts for one year at no charge. Labor warranty on SERVICE CALLS is 30 Days on same problem.";
+        const termsLines = doc.splitTextToSize(termsText1 + "\n" + termsText2, 100);
+        doc.text(termsLines, pageWidth - margin, finalY, { align: 'right' });
+        
+        doc.setFontSize(8);
+        doc.text("Thank you for your business!", pageWidth / 2, pageHeight - 10, { align: 'center' });
 
         return doc.output('datauristring');
 
     } catch (e) {
         console.error("Critical error during PDF generation:", e);
-        showMessage('Critical error generating PDF. Please check console.', 'error');
+        alert('Critical error generating PDF. Check console for details.');
         return null;
     }
 }
