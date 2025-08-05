@@ -689,23 +689,6 @@
     </div>
     </div>
 
-    <!-- Scheduling Link Modal -->
-<div id="linkModal" class="modal">
-    <div class="modal-content !max-w-md">
-        <div class="modal-header">
-            <h2 class="text-xl font-bold text-slate-800">Customer Scheduling Link</h2>
-            <span class="close-button" id="closeLinkModal">&times;</span>
-        </div>
-        <div class="p-6">
-            <p class="text-sm text-slate-600 mb-2">Send this link to the customer to let them choose their appointment time.</p>
-            <input type="text" id="generatedLinkInput" readonly class="form-input bg-slate-100 w-full">
-            <button id="copyLinkBtn" class="btn-primary-stitch w-full justify-center mt-4">
-                <span class="material-icons-outlined text-lg">content_copy</span>
-                Copy Link
-            </button>
-        </div>
-    </div>
-</div>
     <!-- Modals -->
     <div id="confirmationModal" class="modal" style="display: none;">
         <div class="modal-content">
@@ -866,6 +849,18 @@
                     </div>
                 </div>
 
+                <!-- Customer Scheduling Link Section -->
+                <div id="scheduleModalLinkContainer" class="space-y-3 p-4 bg-white border border-slate-200 rounded-lg hidden">
+                    <h3 class="text-lg font-semibold text-slate-700 border-b pb-2 mb-3">Customer Scheduling Link</h3>
+                    <p class="text-sm text-slate-600">Share this link with the customer to allow them to schedule their own appointment.</p>
+                    <div class="flex gap-2">
+                        <input type="text" id="scheduleModalLinkInput" readonly class="form-input bg-slate-100 w-full">
+                        <button type="button" id="scheduleModalCopyBtn" class="btn-secondary-stitch">
+                            <span class="material-icons-outlined text-lg">content_copy</span>
+                        </button>
+                    </div>
+                </div>
+
                 <!-- Scheduling Section -->
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-5 pt-4">
                     <div>
@@ -939,6 +934,19 @@
                 <hr class="my-6">
                 <h3 class="text-lg font-semibold mb-2">Associated Invoices</h3>
                 <div id="modalWarrantyInvoicesContainer" class="space-y-2"></div>
+                
+                <!-- Customer Scheduling Link Section -->
+                <hr class="my-6">
+                <div id="warrantyModalLinkContainer" class="hidden">
+                    <h3 class="text-lg font-semibold mb-2">Customer Scheduling Link</h3>
+                    <p class="text-sm text-slate-600 mb-2">Share this link with the customer for any follow-up appointments.</p>
+                    <div class="flex gap-2">
+                        <input type="text" id="warrantyModalLinkInput" readonly class="form-input bg-slate-100 w-full">
+                        <button type="button" id="warrantyModalCopyBtn" class="btn-secondary-stitch">
+                            <span class="material-icons-outlined text-lg">content_copy</span>
+                        </button>
+                    </div>
+                </div>
             </div>
             <div class="modal-footer">
                 <button class="btn-secondary-stitch close-button">Close</button>
