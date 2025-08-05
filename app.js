@@ -1294,7 +1294,29 @@ document.addEventListener('DOMContentLoaded', () => {
              return;
         }
 
-        const dataToSave = collectInvoiceData("PENDING");
+        // 1. Collect all data from the form
+        const invoiceNumber = document.getElementById('invoiceNumberDisplay').value;
+        const dataToSave = collectInvoiceData(invoiceNumber); 
+
+        // 2. Generate the PDF and attach the Base64 string to the object
+        try {
+            // The generatePDF function returns the Base64 string
+            dataToSave.pdfDataURL = generatePDF(dataToSave); 
+
+            // --- THIS IS THE LINE TO ADD FOR VERIFICATION ---
+            console.log("Generated PDF Base64:", dataToSave.pdfDataURL);
+            // ----------------------------------------------------
+            
+            if (!dataToSave.pdfDataURL) {
+                 showMessage('Warning: Could not generate PDF. The invoice will be queued without it.', 'info');
+            }
+        } catch (pdfError) {
+            console.error("Error during PDF generation:", pdfError);
+            showMessage('Error: Failed to generate PDF. Invoice will be queued without it.', 'error');
+            dataToSave.pdfDataURL = null; // Ensure it's null on error
+        }
+        
+        // 3. Add the complete invoice object (with the Base64 string) to the queue
         pendingInvoices.push(dataToSave);
         showMessage('Invoice added to queue.', 'success');
         showAfterSendInvoiceScreen();
@@ -2572,17 +2594,162 @@ async function showInvoiceScreen(jobId) {
     }
 }
 
-function generatePDF(data) {
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF();
+function generatePDF(invoiceDataForPdf) {
+    console.log("[generatePDF] Starting PDF generation for invoice:", invoiceDataForPdf ? invoiceDataForPdf.invoiceNumber : "Unknown");
+    if (!invoiceDataForPdf) {
+        console.error('[generatePDF] No invoice data provided.');
+        return null;
+    }
 
-    // Add content to the PDF
-    doc.text(`Invoice #${data.invoiceNumber}`, 20, 20);
-    doc.text(`Date: ${data.invoiceDate}`, 20, 30);
-    doc.text(`Customer: ${data.customerName}`, 20, 40);
-    // ... add more data to the PDF as needed
+    try {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+        const pageHeight = doc.internal.pageSize.height;
+        const pageWidth = doc.internal.pageSize.width;
+        const margin = 15;
+        const contentWidth = pageWidth - (2 * margin);
+        let yPos = 5;
 
-    return doc.output('datauristring');
+        // --- HEADER SECTION ---
+        // NOTE: This assumes you have a logoBase64Data variable defined somewhere in your script.
+        // If not, it will just add space.
+        const logoBase64Data = ""; // PASTE YOUR BASE64 LOGO DATA HERE if you have one.
+        if (logoBase64Data) {
+            try {
+                const logoDisplayWidth = 50;
+                const logoX = (pageWidth - logoDisplayWidth) / 2;
+                doc.addImage(logoBase64Data, 'PNG', logoX, yPos, logoDisplayWidth, 0);
+                yPos += (doc.getImageProperties(logoBase64Data).height * logoDisplayWidth / doc.getImageProperties(logoBase64Data).width) + 5;
+            } catch (e) {
+                console.error("[generatePDF] Error adding logo image:", e);
+                yPos += 10;
+            }
+        } else {
+            yPos += 10;
+        }
+
+        doc.setFontSize(10);
+        doc.setFont("helvetica", "bold");
+        doc.text("Safeway Garage Doors", pageWidth / 2, yPos, { align: 'center' });
+        yPos += 5;
+        doc.setFontSize(9);
+        doc.setFont("helvetica", "normal");
+        doc.text("2921 W. Central Ave. Unit C, Santa Ana, CA 92704 | Lic. # 821771", pageWidth / 2, yPos, { align: 'center' });
+        yPos += 5;
+        doc.text("(714) 414-7979 | (805) 201-5815 | (800) 810-3246", pageWidth / 2, yPos, { align: 'center' });
+        yPos += 15;
+
+        // --- BILLING AND INVOICE DETAILS ---
+        const billToY = yPos;
+        let detailsY = yPos;
+
+        doc.setFontSize(10);
+        doc.setFont("helvetica", "bold");
+        doc.text("BILL TO:", margin, billToY);
+        yPos += 5;
+        doc.setFont("helvetica", "normal");
+        doc.text(String(invoiceDataForPdf.customerName || "N/A"), margin, yPos);
+        yPos += 5;
+        if (invoiceDataForPdf.customerAddress) {
+            const addressLines = doc.splitTextToSize(String(invoiceDataForPdf.customerAddress), contentWidth / 2 - 5);
+            doc.text(addressLines, margin, yPos);
+            yPos += (addressLines.length * 4.5);
+        }
+        if (invoiceDataForPdf.customerPhone) {
+            doc.text(`Phone: ${invoiceDataForPdf.customerPhone}`, margin, yPos);
+        }
+
+        let rightColX = pageWidth - margin - 70;
+        doc.setFontSize(18);
+        doc.setFont("helvetica", "bold");
+        doc.text("INVOICE", rightColX, detailsY, { align: 'left' });
+        detailsY += 8;
+
+        doc.setFontSize(10);
+        doc.setFont("helvetica", "bold");
+        doc.text("Invoice #:", rightColX, detailsY);
+        doc.setFont("helvetica", "normal");
+        doc.text(String(invoiceDataForPdf.invoiceNumber || "N/A"), rightColX + 30, detailsY);
+        detailsY += 6;
+
+        doc.setFont("helvetica", "bold");
+        doc.text("Date:", rightColX, detailsY);
+        doc.setFont("helvetica", "normal");
+        doc.text(invoiceDataForPdf.invoiceDate ? new Date(invoiceDataForPdf.invoiceDate + 'T00:00:00').toLocaleDateString() : "N/A", rightColX + 30, detailsY);
+        detailsY += 6;
+        
+        yPos = Math.max(yPos, detailsY) + 10;
+
+        // --- ITEMS TABLE ---
+        const tableBody = invoiceDataForPdf.items && invoiceDataForPdf.items.length > 0 ? invoiceDataForPdf.items.map(item => [
+            item.description || "",
+            item.quantity || 0,
+            (item.price || 0).toFixed(2),
+            (item.total || 0).toFixed(2)
+        ]) : [["No items listed.", "", "", ""]];
+
+        doc.autoTable({
+            startY: yPos,
+            head: [['Description', 'Qty', 'Unit Price', 'Total']],
+            body: tableBody,
+            theme: 'grid',
+            headStyles: { fillColor: [67, 136, 67] }, // A green color
+            styles: { fontSize: 9 },
+            margin: { left: margin, right: margin },
+        });
+        yPos = doc.lastAutoTable.finalY;
+
+        // --- TOTALS SECTION ---
+        let totalsY = yPos + 7;
+        const totalsXLabel = pageWidth - margin - 60;
+        const totalsXValue = pageWidth - margin - 5;
+        doc.setFontSize(10);
+        doc.setFont("helvetica", "normal");
+        doc.text("Subtotal:", totalsXLabel, totalsY, {align: 'left'});
+        doc.text((invoiceDataForPdf.subtotal || 0).toFixed(2), totalsXValue, totalsY, {align: 'right'});
+        totalsY += 6;
+        doc.text("Labor:", totalsXLabel, totalsY, {align: 'left'});
+        doc.text((invoiceDataForPdf.labor || 0).toFixed(2), totalsXValue, totalsY, {align: 'right'});
+        totalsY += 6;
+        doc.text("Service Call:", totalsXLabel, totalsY, {align: 'left'});
+        doc.text((invoiceDataForPdf.serviceCall || 0).toFixed(2), totalsXValue, totalsY, {align: 'right'});
+        totalsY += 6;
+        doc.text(`Sales Tax (${invoiceDataForPdf.salesTaxRate || 0}%):`, totalsXLabel, totalsY, {align: 'left'});
+        doc.text((invoiceDataForPdf.salesTaxAmount || 0).toFixed(2), totalsXValue, totalsY, {align: 'right'});
+        totalsY += 8;
+        doc.setFontSize(11);
+        doc.setFont("helvetica", "bold");
+        doc.text("Total Due:", totalsXLabel, totalsY, {align: 'left'});
+        doc.text(formatCurrency(invoiceDataForPdf.total), totalsXValue, totalsY, {align: 'right'});
+        
+        yPos = totalsY + 10;
+
+        // --- SIGNATURE SECTION ---
+        if (invoiceDataForPdf.signatureDataURL) {
+            yPos = yPos > pageHeight - 50 ? (doc.addPage(), margin) : yPos; // Add page if not enough space
+            doc.setFontSize(10);
+            doc.setFont("helvetica", "bold");
+            doc.text("Customer Signature:", margin, yPos);
+            try {
+                doc.addImage(invoiceDataForPdf.signatureDataURL, 'PNG', margin, yPos + 2, 60, 20);
+                if (invoiceDataForPdf.signedBy) {
+                    doc.setFontSize(9);
+                    doc.setFont("helvetica", "normal");
+                    doc.text(`Signed by: ${invoiceDataForPdf.signedBy}`, margin, yPos + 28);
+                }
+            } catch (e) {
+                console.error("Error adding signature image to PDF:", e);
+                doc.text("Signature could not be displayed.", margin, yPos + 5);
+            }
+        }
+
+        return doc.output('datauristring');
+
+    } catch (e) {
+        console.error("Critical error during PDF generation:", e);
+        showMessage('Critical error generating PDF. Please check console.', 'error');
+        return null;
+    }
 }
 
 async function saveInvoiceData(invoiceDataToSave, isSilent = false, invoiceId = null) {
@@ -2887,7 +3054,7 @@ function collectInvoiceData(autoGeneratedInvoiceNumber) {
     }
     const invoiceData = {
         invoiceNumber: autoGeneratedInvoiceNumber, 
-        invoiceDate: formData.get('invoiceDate'),
+        invoiceDate: document.getElementById('invoiceDate').value,
         poNumber: formData.get('poNumber'),
         selectedCountyTax: selectedCountyValue, 
         planType: formData.get('planType'), 
