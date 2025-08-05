@@ -170,21 +170,25 @@ function renderJobs(jobs) {
     jobsTableBody.innerHTML = sortedJobs.map(job => {
         let statusText = job.status || 'Needs Scheduling';
         let statusClass = 'status-needs-scheduling';
+        let actionsHtml = '';
 
-        if (statusText === 'Scheduled') {
+        if (statusText === 'Needs Scheduling') {
+            statusClass = 'status-needs-scheduling';
+            actionsHtml = `
+                <button class="btn-secondary-stitch schedule-job-btn" data-id="${job.id}">Schedule Manually</button>
+                <button class="btn-primary-stitch generate-link-btn" data-id="${job.id}" title="Generate customer scheduling link">Get Link</button>
+            `;
+        } else if (statusText === 'Scheduled') {
             statusClass = 'status-scheduled';
             if (job.scheduledDate && job.timeSlot) {
                 statusText = `Scheduled: ${job.scheduledDate} (${job.timeSlot})`;
             }
-        } else if (statusText === 'Awaiting completion') {
-            statusClass = 'status-awaiting-completion';
-        } else if (statusText === 'Completed') {
-            statusClass = 'status-completed';
+            actionsHtml = `<button class="btn-secondary-stitch schedule-job-btn" data-id="${job.id}">View/Reschedule</button>`;
+        } else { // Covers 'Awaiting completion' and 'Completed'
+             if (statusText === 'Awaiting completion') statusClass = 'status-awaiting-completion';
+             if (statusText === 'Completed') statusClass = 'status-completed';
+             actionsHtml = `<button class="btn-secondary-stitch view-job-details-btn" data-id="${job.id}">View Details</button>`; // Assume you'll have a generic details view
         }
-        const isAdmin = auth.currentUser && auth.currentUser.email === 'admin@safewayos2.app';
-        const actionsHtml = isAdmin
-            ? `<button class="btn-secondary-stitch schedule-job-btn" data-id="${job.id}">View/Schedule</button>`
-            : `<button class="btn-primary-stitch create-invoice-btn" data-id="${job.id}">Create Invoice</button>`;
 
         return `
             <tr>
@@ -193,7 +197,7 @@ function renderJobs(jobs) {
                 <td>${job.issue || 'N/A'}</td>
                 <td>${job.phone || 'N/A'}</td>
                 <td><span class="status-pill ${statusClass}">${statusText}</span></td>
-                <td>${actionsHtml}</td>
+                <td class="flex gap-2">${actionsHtml}</td>
             </tr>
         `;
     }).join('');
@@ -1609,8 +1613,42 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    const linkModal = document.getElementById('linkModal');
+    const closeLinkModalBtn = document.getElementById('closeLinkModal');
+    const generatedLinkInput = document.getElementById('generatedLinkInput');
+    const copyLinkBtn = document.getElementById('copyLinkBtn');
+
+    // Handler for the copy button
+    copyLinkBtn.addEventListener('click', () => {
+        generatedLinkInput.select();
+        document.execCommand('copy');
+        copyLinkBtn.innerHTML = `<span class="material-icons-outlined text-lg">check</span> Copied!`;
+        setTimeout(() => {
+            copyLinkBtn.innerHTML = `<span class="material-icons-outlined text-lg">content_copy</span> Copy Link`;
+        }, 2000);
+    });
+
+    // Close the link modal
+    closeLinkModalBtn.addEventListener('click', () => {
+        linkModal.style.display = 'none';
+    });
+
+    // Also close on outside click
+    window.addEventListener('click', (event) => {
+        if (event.target == linkModal) {
+            linkModal.style.display = 'none';
+        }
+    });
+
     // Event Delegation for dynamic buttons
     document.body.addEventListener('click', function(event) {
+        if (event.target.classList.contains('generate-link-btn')) {
+            const jobId = event.target.dataset.id;
+            const schedulingUrl = `${window.location.origin}/scheduling.html?jobId=${jobId}`;
+            
+            generatedLinkInput.value = schedulingUrl;
+            linkModal.style.display = 'block';
+        }
         if (event.target.classList.contains('manage-tech-btn')) {
             const techId = event.target.dataset.id;
             const techData = allTechniciansData.find(t => t.id === techId);
