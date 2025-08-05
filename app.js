@@ -178,7 +178,6 @@ function renderJobs(jobs) {
             statusClass = 'status-needs-scheduling';
             actionsHtml = `
                 <button class="btn-secondary-stitch schedule-job-btn" data-id="${job.id}">Schedule Manually</button>
-                <button class="btn-primary-stitch generate-link-btn" data-id="${job.id}" title="Generate customer scheduling link">Get Link</button>
             `;
         } else if (statusText === 'Scheduled') {
             statusClass = 'status-scheduled';
@@ -869,6 +868,28 @@ function openScheduleJobModal(job) {
 
     const timeSlotSelect = document.getElementById('modalJobTimeSlot');
     timeSlotSelect.value = job.timeSlot || "";
+
+    // --- New Link Logic ---
+    const linkContainer = document.getElementById('scheduleModalLinkContainer');
+    const linkInput = document.getElementById('scheduleModalLinkInput');
+    const copyBtn = document.getElementById('scheduleModalCopyBtn');
+
+    if (linkContainer && linkInput && copyBtn) {
+        const schedulingUrl = `${window.location.origin}/scheduling.html?jobId=${job.id}`;
+        linkInput.value = schedulingUrl;
+        linkContainer.classList.remove('hidden');
+
+        copyBtn.onclick = () => {
+            linkInput.select();
+            document.execCommand('copy');
+            const originalIcon = copyBtn.innerHTML;
+            copyBtn.innerHTML = `<span class="material-icons-outlined text-lg">check</span>`;
+            setTimeout(() => {
+                copyBtn.innerHTML = originalIcon;
+            }, 2000);
+        };
+    }
+    // --- End New Link Logic ---
 
     scheduleJobModal.style.display = 'block';
 }
@@ -1639,42 +1660,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    const linkModal = document.getElementById('linkModal');
-    const closeLinkModalBtn = document.getElementById('closeLinkModal');
-    const generatedLinkInput = document.getElementById('generatedLinkInput');
-    const copyLinkBtn = document.getElementById('copyLinkBtn');
-
-    // Handler for the copy button
-    copyLinkBtn.addEventListener('click', () => {
-        generatedLinkInput.select();
-        document.execCommand('copy');
-        copyLinkBtn.innerHTML = `<span class="material-icons-outlined text-lg">check</span> Copied!`;
-        setTimeout(() => {
-            copyLinkBtn.innerHTML = `<span class="material-icons-outlined text-lg">content_copy</span> Copy Link`;
-        }, 2000);
-    });
-
-    // Close the link modal
-    closeLinkModalBtn.addEventListener('click', () => {
-        linkModal.style.display = 'none';
-    });
-
-    // Also close on outside click
-    window.addEventListener('click', (event) => {
-        if (event.target == linkModal) {
-            linkModal.style.display = 'none';
-        }
-    });
 
     // Event Delegation for dynamic buttons
     document.body.addEventListener('click', function(event) {
-        if (event.target.classList.contains('generate-link-btn')) {
-            const jobId = event.target.dataset.id;
-            const schedulingUrl = `${window.location.origin}/scheduling.html?jobId=${jobId}`;
-            
-            generatedLinkInput.value = schedulingUrl;
-            linkModal.style.display = 'block';
-        }
         if (event.target.classList.contains('manage-tech-btn')) {
             const techId = event.target.dataset.id;
             const techData = allTechniciansData.find(t => t.id === techId);
@@ -3119,6 +3107,31 @@ function openWarrantyDetailModal(warranty) {
     } else {
         invoicesContainer.innerHTML = '<p>No invoices associated with this warranty.</p>';
     }
+
+    // --- New Link Logic ---
+    const linkContainer = document.getElementById('warrantyModalLinkContainer');
+    const linkInput = document.getElementById('warrantyModalLinkInput');
+    const copyBtn = document.getElementById('warrantyModalCopyBtn');
+
+    if (linkContainer && linkInput && copyBtn && job.id) {
+        const schedulingUrl = `${window.location.origin}/scheduling.html?jobId=${job.id}`;
+        linkInput.value = schedulingUrl;
+        linkContainer.classList.remove('hidden');
+
+        copyBtn.onclick = () => {
+            linkInput.select();
+            document.execCommand('copy');
+            const originalIcon = copyBtn.innerHTML;
+            copyBtn.innerHTML = `<span class="material-icons-outlined text-lg">check</span>`;
+            setTimeout(() => {
+                copyBtn.innerHTML = originalIcon;
+            }, 2000);
+        };
+    } else if (linkContainer) {
+        // Hide it if there's no job id
+        linkContainer.classList.add('hidden');
+    }
+    // --- End New Link Logic ---
 
     modal.style.display = 'block';
 
