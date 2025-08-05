@@ -11,6 +11,7 @@ const firebaseConfig = {
 // --- Cloud Function URLs ---
 const GENERATE_TRIP_SHEETS_URL = 'https://generate-trip-sheets-216681158749.us-central1.run.app';
 const ASK_DANIEL_URL = 'https://ask-daniel-216681158749.us-central1.run.app';
+const SEND_SCHEDULING_LINKS_URL = 'https://send-manual-scheduling-links-216681158749.us-central1.run.app';
 
 // --- Global State ---
 let allJobsData = [];
@@ -78,6 +79,7 @@ const approveTripSheetsBtn = document.getElementById('approveTripSheetsBtn');
 
 const addJobModal = document.getElementById('addJobModal');
 const openAddJobModalButton = document.getElementById('openAddJobModalButton');
+const sendSchedulingLinksBtn = document.getElementById('sendSchedulingLinksBtn');
 const closeAddJobModalButton = document.getElementById('closeAddJobModal');
 const cancelAddJobButton = document.getElementById('cancelAddJob');
 const newJobForm = document.getElementById('newJobForm');
@@ -184,6 +186,9 @@ function renderJobs(jobs) {
                 statusText = `Scheduled: ${job.scheduledDate} (${job.timeSlot})`;
             }
             actionsHtml = `<button class="btn-secondary-stitch schedule-job-btn" data-id="${job.id}">View/Reschedule</button>`;
+        } else if (statusText === 'Link Sent!') {
+            statusClass = 'status-link-sent';
+            actionsHtml = `<button class="btn-secondary-stitch schedule-job-btn" data-id="${job.id}">Schedule Manually</button>`;
         } else { // Covers 'Awaiting completion' and 'Completed'
              if (statusText === 'Awaiting completion') statusClass = 'status-awaiting-completion';
              if (statusText === 'Completed') statusClass = 'status-completed';
@@ -1463,6 +1468,27 @@ document.addEventListener('DOMContentLoaded', () => {
             saveJobButton.textContent = 'Save Job';
         }
         newJobForm.reset();
+    });
+
+    if(sendSchedulingLinksBtn) sendSchedulingLinksBtn.addEventListener('click', async () => {
+        sendSchedulingLinksBtn.disabled = true;
+        sendSchedulingLinksBtn.innerHTML = `<span class="material-icons-outlined text-lg animate-spin">sync</span> Sending...`;
+        
+        try {
+            const response = await fetch(SEND_SCHEDULING_LINKS_URL);
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Server responded with ${response.status}: ${errorText}`);
+            }
+            const result = await response.json();
+            showMessage(result.message || 'Links sent successfully!', 'success');
+        } catch (error) {
+            console.error('Error sending scheduling links:', error);
+            showMessage(`Error: ${error.message}`, 'error');
+        } finally {
+            sendSchedulingLinksBtn.disabled = false;
+            sendSchedulingLinksBtn.innerHTML = `<span class="material-icons-outlined text-lg">send</span>Send Scheduling Links`;
+        }
     });
     if(openAddPartModalButton) openAddPartModalButton.addEventListener('click', () => openAddPartModal());
     if(openLogPartUsageButton) openLogPartUsageButton.addEventListener('click', openLogPartUsageModal);
