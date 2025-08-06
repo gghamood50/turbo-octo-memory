@@ -2161,30 +2161,30 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    if (sendAllInvoicesBtn) {
-        sendAllInvoicesBtn.addEventListener('click', async () => {
-            if (pendingInvoices.length === 0) {
-                showMessage("No invoices to send.", "info");
-                return;
-            }
+if (sendAllInvoicesBtn) {
+    sendAllInvoicesBtn.addEventListener('click', async () => {
+        if (pendingInvoices.length === 0) {
+            showMessage("No invoices to send.", "info");
+            return;
+        }
 
-            sendAllInvoicesBtn.disabled = true;
-            sendAllInvoicesBtn.textContent = 'Sending...';
+        sendAllInvoicesBtn.disabled = true;
+        sendAllInvoicesBtn.textContent = 'Processing...';
 
-            try {
-                // --- START: BUG FIX ---
-                // 1. Find the job details from the correct data source BEFORE any database writes.
-                // The job could be in the admin's list (allJobsData) or the worker's list (currentWorkerAssignedJobs).
-                const jobDataSource = allJobsData.length > 0 ? allJobsData : currentWorkerAssignedJobs;
-                const jobDetails = jobDataSource.find(j => j.id === currentJobIdForInvoicing);
-            // 2. Validate that the job details were found.
+        // The URL for your deployed Cloud Run service
+        const serviceUrl = "https://save-pdf-to-storage-216681158749.us-central1.run.app"; 
+
+        try {
+            const jobDataSource = allJobsData.length > 0 ? allJobsData : currentWorkerAssignedJobs;
+            const jobDetails = jobDataSource.find(j => j.id === currentJobIdForInvoicing);
             if (!jobDetails) {
-                throw new Error(`Could not find details for Job ID: ${currentJobIdForInvoicing}. Aborting.`);
+                throw new Error(`Could not find job details. Aborting.`);
             }
-            // 3. Make a copy of the invoices for the warranty record before clearing the main array.
+            
             const invoicesForWarranty = [...pendingInvoices];
-            // --- END: BUG FIX ---
-            for (const invoice of pendingInvoices) {
+
+            for (const invoice of invoicesForWarranty) {
+                // This transaction now only handles getting the next invoice number
                 await db.runTransaction(async (transaction) => {
                     const counterRef = db.collection('counters').doc('invoiceCounter');
                     const counterDoc = await transaction.get(counterRef);
@@ -2194,37 +2194,50 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     const formattedInvoiceNumber = formatInvoiceNumber(nextNumber);
                     invoice.invoiceNumber = formattedInvoiceNumber;
-                    
-                    invoice.pdfDataURL = generatePDF(invoice);
-                    if (!invoice.pdfDataURL) {
-                        showMessage(`Failed to generate PDF for ${invoice.customerName}. It will be saved without a PDF.`, 'warning');
-                    }
-                    const newInvoiceRef = db.collection('invoices').doc();
-                    transaction.set(newInvoiceRef, invoice);
                     transaction.set(counterRef, { lastNumber: nextNumber }, { merge: true });
                 });
+
+                if (invoice.pdfDataURL) {
+                    // Call your deployed HTTP service
+                    const response = await fetch(serviceUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                            base64Pdf: invoice.pdfDataURL, 
+                            invoiceNumber: invoice.invoiceNumber 
+                        })
+                    });
+
+                    if (!response.ok) {
+                        const errorResult = await response.json();
+                        throw new Error(`PDF upload failed: ${errorResult.error}`);
+                    }
+
+                    const result = await response.json();
+                    invoice.pdfUrl = result.pdfUrl; // Store the final URL
+                }
+                delete invoice.pdfDataURL; // Clean up the Base64 data
             }
-            if (currentJobIdForInvoicing) {
-                // Use a batch write for atomicity
-                const batch = db.batch();
-                // Update Job Status
-                const jobRef = db.collection('jobs').doc(currentJobIdForInvoicing);
-                batch.update(jobRef, { status: 'Completed' });
-                // Create Warranty with the validated jobDetails
-                const warrantyRef = db.collection('warranties').doc();
-                const warrantyData = {
-                    job: jobDetails, // Use the validated job details object
-                    invoices: invoicesForWarranty, // Use the copied invoices
-                    completionDate: firebase.firestore.FieldValue.serverTimestamp()
-                };
-                batch.set(warrantyRef, warrantyData);
-                await batch.commit();
-            }
+
+            // Update job status and create the warranty record in Firestore
+            const batch = db.batch();
+            const jobRef = db.collection('jobs').doc(currentJobIdForInvoicing);
+            batch.update(jobRef, { status: 'Completed' });
+            
+            const warrantyRef = db.collection('warranties').doc();
+            const warrantyData = {
+                job: jobDetails,
+                invoices: invoicesForWarranty, // This array now contains the pdfUrl
+                completionDate: firebase.firestore.FieldValue.serverTimestamp()
+            };
+            batch.set(warrantyRef, warrantyData);
+            await batch.commit();
             
             showMessage('All invoices sent and job finalized!', 'success');
-            pendingInvoices = []; // Now it's safe to clear the array
+            pendingInvoices = [];
             currentJobIdForInvoicing = null;
             showWorkerHomeScreen();
+
         } catch (error) {
             console.error("Error sending invoices or finalizing job:", error);
             showMessage("Error: " + error.message, "error");
@@ -2232,8 +2245,8 @@ document.addEventListener('DOMContentLoaded', () => {
             sendAllInvoicesBtn.disabled = false;
             sendAllInvoicesBtn.textContent = 'Send All Invoices to Office';
         }
-        });
-    }
+    });
+}
 
     // Initialize Firebase and Auth State Change Listener
     try {
