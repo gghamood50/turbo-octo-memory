@@ -571,44 +571,61 @@
                         </div>
                     </div>
 
-                    <div class="card">
-                        <h2 class="text-lg font-semibold mb-3">Summary</h2>
-                        <div class="space-y-2">
-        <!-- NEW: Warranty Subtotal -->
-        <div class="flex justify-between text-sm">
-            <span class="form-label text-slate-600">Warranty Subtotal:</span>
-            <span id="warrantySubtotalDisplay" class="font-medium text-slate-600">$0.00</span>
+<div class="card">
+    <h2 class="text-lg font-semibold mb-3">Summary</h2>
+    <div class="space-y-2">
+        <!-- Subtotals will be calculated in the background -->
+        <input type="hidden" id="warrantySubtotalDisplay">
+        <input type="hidden" id="customerSubtotalDisplay">
+        <hr class="my-3 border-slate-200">
+        
+        <!-- NEW: Four separate fee inputs -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
+            <div>
+                <label for="warrantyServiceCall" class="form-label text-slate-600">Warranty Service Call ($)</label>
+                <input type="number" id="warrantyServiceCall" name="warrantyServiceCall" class="form-input text-right" value="0" min="0" step="0.01">
+            </div>
+            <div>
+                <label for="customerServiceCall" class="form-label">Customer Service Call ($)</label>
+                <input type="number" id="customerServiceCall" name="customerServiceCall" class="form-input text-right" value="0" min="0" step="0.01">
+            </div>
+            <div>
+                <label for="warrantyLabor" class="form-label text-slate-600">Warranty Labor ($)</label>
+                <input type="number" id="warrantyLabor" name="warrantyLabor" class="form-input text-right" value="0" min="0" step="0.01">
+            </div>
+            <div>
+                <label for="customerLabor" class="form-label">Customer Labor ($)</label>
+                <input type="number" id="customerLabor" name="customerLabor" class="form-input text-right" value="0" min="0" step="0.01">
+            </div>
         </div>
-        <!-- NEW: Customer Subtotal -->
-                            <div class="flex justify-between">
-            <span class="form-label">Customer Subtotal:</span>
-            <span id="customerSubtotalDisplay" class="font-medium">$0.00</span>
-                            </div>
-                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
-                                <div>
-                                    <label for="labor" class="form-label">Labor ($):</label>
-                                    <input type="number" id="labor" name="labor" class="form-input text-right" value="0" min="0" step="0.01" placeholder="0.00">
-                                </div>
-                                <div>
-                                    <label for="serviceCall" class="form-label">Service Call ($):</label>
-                                    <input type="number" id="serviceCall" name="serviceCall" class="form-input text-right" value="0" min="0" step="0.01" placeholder="0.00">
-                                </div>
-                            </div>
-                            <div class="mt-2">
-                                <label for="salesTaxRate" class="form-label">Sales Tax Rate (%):</label>
-                                <input type="number" id="salesTaxRate" name="salesTaxRate" class="form-input text-right bg-gray-100 cursor-not-allowed" value="0.00" min="0" step="0.01" readonly>
-                            </div>
-                            <div class="flex justify-between mt-1">
-                                <span class="form-label">Calculated Sales Tax:</span>
-                                <span id="salesTaxAmountDisplay" class="font-medium">$0.00</span>
-                            </div>
-                            <hr class="my-3 border-gray-300">
-                            <div class="flex justify-between font-bold text-lg">
+        
+        <hr class="my-3 border-slate-200">
+        
+        <!-- Tax and Final Total -->
+        <div class="mt-2">
+            <label for="salesTaxRate" class="form-label">Sales Tax Rate (%):</label>
+            <input type="number" id="salesTaxRate" name="salesTaxRate" class="form-input text-right bg-gray-100 cursor-not-allowed" value="0.00" min="0" step="0.01" readonly>
+        </div>
+        <div class="flex justify-between mt-1">
+            <span class="form-label">Calculated Sales Tax:</span>
+            <span id="salesTaxAmountDisplay" class="font-medium">$0.00</span>
+        </div>
+        <hr class="my-3 border-gray-300">
+        <div class="flex justify-between font-bold text-lg">
             <span>TOTAL (Due from Customer):</span>
             <span id="totalDisplay" class="text-green-600">$0.00</span>
-                            </div>
-                        </div>
-                    </div>
+        </div>
+        <div class="flex justify-between font-bold text-lg text-slate-600">
+            <span>TOTAL (Due from Warranty):</span>
+            <span id="warrantyTotalDisplay" class="text-blue-600">$0.00</span>
+        </div>
+        <hr class="my-3 border-gray-300">
+        <div class="flex justify-between font-bold text-xl">
+            <span>GRAND TOTAL:</span>
+            <span id="grandTotalDisplay" class="text-black-600">$0.00</span>
+        </div>
+    </div>
+</div>
 
                     <div id="termsAndConditionsSection" class="card">
                         <h2 class="text-lg font-semibold mb-2">Terms & Conditions</h2>
