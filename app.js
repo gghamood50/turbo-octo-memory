@@ -2994,26 +2994,48 @@ let lineItemCount = 0;
 function addLineItem(description = '', quantity = '', price = '') {
     lineItemCount++;
     const lineItemsContainer = document.getElementById('lineItemsContainer');
+
+    // This is the new HTML for Variant 1
     const newItemHtml = `
-        <div class="line-item p-3 border border-gray-200 rounded-md bg-gray-50" id="item-${lineItemCount}">
-            <div class="grid grid-cols-1 md:grid-cols-12 gap-2 items-center">
-                <div class="md:col-span-6">
-                    <input type="text" value="${description}" name="itemDescription-${lineItemCount}" class="form-input mt-1 text-sm" placeholder="Service or Product">
+        <div class="line-item p-4 border border-slate-200 rounded-lg bg-slate-50" id="item-${lineItemCount}">
+            <div class="grid grid-cols-12 gap-4 items-end">
+                <!-- Item Description -->
+                <div class="col-span-12 md:col-span-6">
+                    <label for="itemDescription-${lineItemCount}" class="form-label">Item Name / Description</label>
+                    <input type="text" id="itemDescription-${lineItemCount}" name="itemDescription-${lineItemCount}" class="form-input" value="${description}">
                 </div>
-                <div class="md:col-span-2">
-                    <input type="number" value="${quantity}" name="itemQuantity-${lineItemCount}" class="form-input mt-1 text-sm text-right" min="0" step="any" placeholder="1">
+                <!-- Quantity -->
+                <div class="col-span-4 md:col-span-2">
+                    <label for="itemQuantity-${lineItemCount}" class="form-label">Qty</label>
+                    <input type="number" id="itemQuantity-${lineItemCount}" name="itemQuantity-${lineItemCount}" class="form-input text-center" value="${quantity}">
                 </div>
-                <div class="md:col-span-2">
-                    <input type="number" value="${price}" name="itemPrice-${lineItemCount}" class="form-input mt-1 text-sm text-right" min="0" step="0.01" placeholder="0.00">
+                <!-- Price -->
+                <div class="col-span-4 md:col-span-2">
+                    <label for="itemPrice-${lineItemCount}" class="form-label">Price</label>
+                    <input type="number" id="itemPrice-${lineItemCount}" name="itemPrice-${lineItemCount}" class="form-input text-right" value="${price}">
                 </div>
-                <div class="md:col-span-1 text-right self-center">
-                    <span id="itemTotal-${lineItemCount}" class="text-sm font-medium text-gray-700">$0.00</span>
-                </div>
-                <div class="md:col-span-1 text-right self-center">
-                    <button type="button" class="removeItemBtn btn btn-danger btn-sm p-2 text-xs" data-itemid="${lineItemCount}">&times;</button>
+                <!-- Total -->
+                <div class="col-span-4 md:col-span-2 text-right">
+                     <label class="form-label">Total</label>
+                    <p id="itemTotal-${lineItemCount}" class="font-semibold text-slate-800 text-lg">$0.00</p>
                 </div>
             </div>
-        </div>`;
+            <hr class="my-4 border-slate-200">
+            <div class="flex justify-between items-center">
+                <!-- Warranty Toggle -->
+                <div class="flex items-center">
+                    <div class="relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in">
+                        <input type="checkbox" name="warrantyToggle-${lineItemCount}" id="warrantyToggle-${lineItemCount}" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer" checked/>
+                        <label for="warrantyToggle-${lineItemCount}" class="toggle-label block overflow-hidden h-6 rounded-full bg-slate-300 cursor-pointer"></label>
+                    </div>
+                    <label for="warrantyToggle-${lineItemCount}" class="text-sm font-medium text-slate-700">Covered by Warranty?</label>
+                </div>
+                <!-- Remove Button -->
+                <button type="button" class="removeItemBtn text-red-500 hover:text-red-700 font-semibold text-sm" data-itemid="${lineItemCount}">Remove</button>
+            </div>
+        </div>
+    `;
+
     if(lineItemsContainer) lineItemsContainer.insertAdjacentHTML('beforeend', newItemHtml);
     attachLineItemListeners(lineItemCount);
     updateLineItemTotal(lineItemCount);
