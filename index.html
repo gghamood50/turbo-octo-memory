@@ -546,11 +546,6 @@
                     </div>
 
                     <div class="card">
-                        <h2 class="text-lg font-semibold mb-3">Non-Covered Items</h2>
-                        <textarea id="nonCoveredItemsText" name="nonCoveredItemsText" rows="3" class="form-input" placeholder="Enter any non-covered items or services..."></textarea>
-                    </div>
-
-                    <div class="card">
                         <h2 class="text-lg font-semibold mb-3">Payment Method</h2>
                         <div id="paymentMethodRadioGroup" class="payment-method-group">
                             <label class="flex items-center">
@@ -579,9 +574,15 @@
                     <div class="card">
                         <h2 class="text-lg font-semibold mb-3">Summary</h2>
                         <div class="space-y-2">
+        <!-- NEW: Warranty Subtotal -->
+        <div class="flex justify-between text-sm">
+            <span class="form-label text-slate-600">Warranty Subtotal:</span>
+            <span id="warrantySubtotalDisplay" class="font-medium text-slate-600">$0.00</span>
+        </div>
+        <!-- NEW: Customer Subtotal -->
                             <div class="flex justify-between">
-                                <span class="form-label">Subtotal:</span>
-                                <span id="subtotalDisplay" class="font-medium">$0.00</span>
+            <span class="form-label">Customer Subtotal:</span>
+            <span id="customerSubtotalDisplay" class="font-medium">$0.00</span>
                             </div>
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
                                 <div>
@@ -603,8 +604,8 @@
                             </div>
                             <hr class="my-3 border-gray-300">
                             <div class="flex justify-between font-bold text-lg">
-                                <span style="color: var(--color-darkest);">TOTAL:</span>
-                                <span id="totalDisplay" style="color: var(--color-accent);">$0.00</span>
+            <span>TOTAL (Due from Customer):</span>
+            <span id="totalDisplay" class="text-green-600">$0.00</span>
                             </div>
                         </div>
                     </div>
