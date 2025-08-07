@@ -3393,8 +3393,8 @@ function showAfterSendInvoiceScreen() {
                 </svg>
               </div>
               <div class="flex flex-col justify-center">
-                <p class="text-[#111518] text-base font-medium leading-normal line-clamp-1">Invoice for ${invoice.customerName}</p>
-                <p class="text-[#60768a] text-sm font-normal leading-normal line-clamp-2">Total: ${formatCurrency(invoice.total)}</p>
+                <p class="text-[#111518] text-base font-medium leading-normal">Invoice for ${invoice.customerName} (${invoice.invoiceType === 'warranty' ? 'Warranty' : 'Non covered'})</p>
+                <p class="text-[#60768a] text-sm font-normal leading-normal">Total: ${formatCurrency(invoice.total)}</p>
               </div>
             </div>
         `;
