@@ -3043,29 +3043,53 @@ function addLineItem(description = '', quantity = '', price = '') {
 }
 
 function updateTotals() {
-    const subtotalDisplay = document.getElementById('subtotalDisplay');
+    // Find the new display elements in the HTML (we will add these to index.html next)
+    const warrantySubtotalDisplay = document.getElementById('warrantySubtotalDisplay');
+    const customerSubtotalDisplay = document.getElementById('customerSubtotalDisplay');
     const totalDisplay = document.getElementById('totalDisplay');
     const laborInput = document.getElementById('labor');
     const serviceCallInput = document.getElementById('serviceCall');
     const salesTaxRateInput = document.getElementById('salesTaxRate');
     const salesTaxAmountDisplay = document.getElementById('salesTaxAmountDisplay');
 
-    let subtotal = 0;
+    let warrantySubtotal = 0;
+    let customerSubtotal = 0;
+
     document.querySelectorAll('.line-item').forEach(item => {
         const id = item.id.split('-')[1];
         const quantityEl = document.querySelector(`[name=itemQuantity-${id}]`);
         const priceEl = document.querySelector(`[name=itemPrice-${id}]`);
-        if (quantityEl && priceEl) {
-            subtotal += (parseFloat(quantityEl.value) || 0) * (parseFloat(priceEl.value) || 0);
+        const warrantyToggle = document.querySelector(`[name=warrantyToggle-${id}]`);
+
+        if (quantityEl && priceEl && warrantyToggle) {
+            const itemTotal = (parseFloat(quantityEl.value) || 0) * (parseFloat(priceEl.value) || 0);
+
+            // Check if the 'Covered by Warranty?' toggle is checked
+            if (warrantyToggle.checked) {
+                warrantySubtotal += itemTotal;
+            } else {
+                customerSubtotal += itemTotal;
+            }
         }
     });
-    if(subtotalDisplay) subtotalDisplay.textContent = formatCurrency(subtotal);
+
+    // We calculate sales tax ONLY on customer-paid items
     const labor = laborInput ? (parseFloat(laborInput.value) || 0) : 0;
     const serviceCall = serviceCallInput ? (parseFloat(serviceCallInput.value) || 0) : 0;
     const taxRate = salesTaxRateInput ? (parseFloat(salesTaxRateInput.value) || 0) : 0;
-    const salesTaxAmount = subtotal * (taxRate / 100);
+    
+    // Tax is applied to customer-paid parts, labor, and service call fees
+    const taxableTotal = customerSubtotal + labor + serviceCall;
+    const salesTaxAmount = taxableTotal * (taxRate / 100);
+    
+    // The final total is what the customer owes
+    const finalTotal = customerSubtotal + labor + serviceCall + salesTaxAmount;
+
+    // Update the display elements
+    if(warrantySubtotalDisplay) warrantySubtotalDisplay.textContent = formatCurrency(warrantySubtotal);
+    if(customerSubtotalDisplay) customerSubtotalDisplay.textContent = formatCurrency(customerSubtotal);
     if(salesTaxAmountDisplay) salesTaxAmountDisplay.textContent = formatCurrency(salesTaxAmount);
-    if(totalDisplay) totalDisplay.textContent = formatCurrency(subtotal + labor + serviceCall + salesTaxAmount);
+    if(totalDisplay) totalDisplay.textContent = formatCurrency(finalTotal);
 }
 
 function initializeSignaturePad() {
@@ -3136,6 +3160,9 @@ function attachLineItemListeners(id) {
     const quantityInput = document.querySelector(`[name=itemQuantity-${id}]`);
     const priceInput = document.querySelector(`[name=itemPrice-${id}]`);
     const removeItemButton = document.querySelector(`#item-${id} .removeItemBtn`);
+    // --- FIX STARTS HERE ---
+    const warrantyToggle = document.querySelector(`[name=warrantyToggle-${id}]`); // Get the new toggle
+
     if(quantityInput && priceInput) {
         [quantityInput, priceInput].forEach(input => {
             input.addEventListener('input', () => {
@@ -3144,6 +3171,15 @@ function attachLineItemListeners(id) {
             });
         });
     }
+    
+    // Add an event listener to the new toggle switch
+    if (warrantyToggle) {
+        warrantyToggle.addEventListener('change', () => {
+            updateTotals(); // Recalculate everything when the toggle is clicked
+        });
+    }
+    // --- FIX ENDS HERE ---
+
     if (removeItemButton) {
         removeItemButton.addEventListener('click', () => {
             const itemToRemove = document.getElementById(`item-${id}`);
