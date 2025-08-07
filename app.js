@@ -1218,6 +1218,16 @@ document.addEventListener('DOMContentLoaded', () => {
     if(laborInput) laborInput.addEventListener('input', updateTotals);
     if(serviceCallInput) serviceCallInput.addEventListener('input', updateTotals);
 
+    const warrantyLaborInput = document.getElementById('warrantyLabor');
+    const customerLaborInput = document.getElementById('customerLabor');
+    const warrantyServiceCallInput = document.getElementById('warrantyServiceCall');
+    const customerServiceCallInput = document.getElementById('customerServiceCall');
+
+    if(warrantyLaborInput) warrantyLaborInput.addEventListener('input', updateTotals);
+    if(customerLaborInput) customerLaborInput.addEventListener('input', updateTotals);
+    if(warrantyServiceCallInput) warrantyServiceCallInput.addEventListener('input', updateTotals);
+    if(customerServiceCallInput) customerServiceCallInput.addEventListener('input', updateTotals);
+
     if (customTaxRateInput) {
         customTaxRateInput.addEventListener('input', function() {
             const otherRadio = document.querySelector('input[name="countyTax"][value="Other"]');
@@ -3043,18 +3053,25 @@ function addLineItem(description = '', quantity = '', price = '') {
 }
 
 function updateTotals() {
-    // Find the new display elements in the HTML (we will add these to index.html next)
+    // Get all display elements
     const warrantySubtotalDisplay = document.getElementById('warrantySubtotalDisplay');
     const customerSubtotalDisplay = document.getElementById('customerSubtotalDisplay');
     const totalDisplay = document.getElementById('totalDisplay');
-    const laborInput = document.getElementById('labor');
-    const serviceCallInput = document.getElementById('serviceCall');
+    const warrantyTotalDisplay = document.getElementById('warrantyTotalDisplay');
+    const grandTotalDisplay = document.getElementById('grandTotalDisplay');
     const salesTaxRateInput = document.getElementById('salesTaxRate');
     const salesTaxAmountDisplay = document.getElementById('salesTaxAmountDisplay');
+
+    // Get all the new fee input elements
+    const warrantyLaborInput = document.getElementById('warrantyLabor');
+    const customerLaborInput = document.getElementById('customerLabor');
+    const warrantyServiceCallInput = document.getElementById('warrantyServiceCall');
+    const customerServiceCallInput = document.getElementById('customerServiceCall');
 
     let warrantySubtotal = 0;
     let customerSubtotal = 0;
 
+    // Calculate subtotals from line items
     document.querySelectorAll('.line-item').forEach(item => {
         const id = item.id.split('-')[1];
         const quantityEl = document.querySelector(`[name=itemQuantity-${id}]`);
@@ -3063,8 +3080,6 @@ function updateTotals() {
 
         if (quantityEl && priceEl && warrantyToggle) {
             const itemTotal = (parseFloat(quantityEl.value) || 0) * (parseFloat(priceEl.value) || 0);
-
-            // Check if the 'Covered by Warranty?' toggle is checked
             if (warrantyToggle.checked) {
                 warrantySubtotal += itemTotal;
             } else {
@@ -3073,23 +3088,30 @@ function updateTotals() {
         }
     });
 
-    // We calculate sales tax ONLY on customer-paid items
-    const labor = laborInput ? (parseFloat(laborInput.value) || 0) : 0;
-    const serviceCall = serviceCallInput ? (parseFloat(serviceCallInput.value) || 0) : 0;
-    const taxRate = salesTaxRateInput ? (parseFloat(salesTaxRateInput.value) || 0) : 0;
-    
-    // Tax is applied to customer-paid parts, labor, and service call fees
-    const taxableTotal = customerSubtotal + labor + serviceCall;
-    const salesTaxAmount = taxableTotal * (taxRate / 100);
-    
-    // The final total is what the customer owes
-    const finalTotal = customerSubtotal + labor + serviceCall + salesTaxAmount;
+    // Read the values from the four new fee fields
+    const warrantyLabor = warrantyLaborInput ? (parseFloat(warrantyLaborInput.value) || 0) : 0;
+    const customerLabor = customerLaborInput ? (parseFloat(customerLaborInput.value) || 0) : 0;
+    const warrantyServiceCall = warrantyServiceCallInput ? (parseFloat(warrantyServiceCallInput.value) || 0) : 0;
+    const customerServiceCall = customerServiceCallInput ? (parseFloat(customerServiceCallInput.value) || 0) : 0;
 
-    // Update the display elements
-    if(warrantySubtotalDisplay) warrantySubtotalDisplay.textContent = formatCurrency(warrantySubtotal);
-    if(customerSubtotalDisplay) customerSubtotalDisplay.textContent = formatCurrency(customerSubtotal);
-    if(salesTaxAmountDisplay) salesTaxAmountDisplay.textContent = formatCurrency(salesTaxAmount);
-    if(totalDisplay) totalDisplay.textContent = formatCurrency(finalTotal);
+    // Calculate sales tax
+    const taxRate = salesTaxRateInput ? (parseFloat(salesTaxRateInput.value) || 0) : 0;
+    const customerTax = customerSubtotal * (taxRate / 100);
+    const warrantyTax = warrantySubtotal * (taxRate / 100);
+    const totalTax = customerTax + warrantyTax;
+
+    // Calculate totals
+    const customerTotal = customerSubtotal + customerLabor + customerServiceCall + customerTax;
+    const warrantyTotal = warrantySubtotal + warrantyLabor + warrantyServiceCall + warrantyTax;
+    const grandTotal = customerTotal + warrantyTotal;
+
+    // Update all the display elements on the screen
+    if(warrantySubtotalDisplay) warrantySubtotalDisplay.value = warrantySubtotal;
+    if(customerSubtotalDisplay) customerSubtotalDisplay.value = customerSubtotal;
+    if(salesTaxAmountDisplay) salesTaxAmountDisplay.textContent = formatCurrency(totalTax);
+    if(totalDisplay) totalDisplay.textContent = formatCurrency(customerTotal);
+    if(warrantyTotalDisplay) warrantyTotalDisplay.textContent = formatCurrency(warrantyTotal);
+    if(grandTotalDisplay) grandTotalDisplay.textContent = formatCurrency(grandTotal);
 }
 
 function initializeSignaturePad() {
@@ -3209,6 +3231,46 @@ function collectInvoiceData(autoGeneratedInvoiceNumber) {
     if (selectedCountyValue === 'Other') {
         selectedCountyValue = formData.get('customAreaName') || 'Custom';
     }
+
+    let warrantySubtotal = 0;
+    let customerSubtotal = 0;
+    const items = [];
+    document.querySelectorAll('.line-item').forEach(item => {
+        const id = item.id.split('-')[1];
+        const descriptionEl = document.querySelector(`[name=itemDescription-${id}]`);
+        const quantityEl = document.querySelector(`[name=itemQuantity-${id}]`);
+        const priceEl = document.querySelector(`[name=itemPrice-${id}]`);
+        const warrantyToggle = document.querySelector(`[name=warrantyToggle-${id}]`);
+
+        if(descriptionEl && quantityEl && priceEl && warrantyToggle){
+            const description = descriptionEl.value;
+            const quantity = parseFloat(quantityEl.value) || 0;
+            const price = parseFloat(priceEl.value) || 0;
+            const itemTotal = quantity * price;
+            items.push({ description, quantity, price, total: itemTotal, isWarranty: warrantyToggle.checked });
+            
+            if (warrantyToggle.checked) {
+                warrantySubtotal += itemTotal;
+            } else {
+                customerSubtotal += itemTotal;
+            }
+        }
+    });
+
+    const warrantyLabor = (parseFloat(document.getElementById('warrantyLabor').value) || 0);
+    const customerLabor = (parseFloat(document.getElementById('customerLabor').value) || 0);
+    const warrantyServiceCall = (parseFloat(document.getElementById('warrantyServiceCall').value) || 0);
+    const customerServiceCall = (parseFloat(document.getElementById('customerServiceCall').value) || 0);
+    const salesTaxRate = parseFloat(document.getElementById('salesTaxRate').value) || 0;
+
+    const customerTax = customerSubtotal * (salesTaxRate / 100);
+    const warrantyTax = warrantySubtotal * (salesTaxRate / 100);
+    const totalTax = customerTax + warrantyTax;
+
+    const customerTotal = customerSubtotal + customerLabor + customerServiceCall + customerTax;
+    const warrantyTotal = warrantySubtotal + warrantyLabor + warrantyServiceCall + warrantyTax;
+    const grandTotal = customerTotal + warrantyTotal;
+
     const invoiceData = {
         invoiceNumber: autoGeneratedInvoiceNumber, 
         invoiceDate: document.getElementById('invoiceDate').value,
@@ -3226,38 +3288,33 @@ function collectInvoiceData(autoGeneratedInvoiceNumber) {
         recommendations: document.getElementById('recommendations').value,
         paymentMethod: paymentMethodRadio ? paymentMethodRadio.value : null,
         chequeNumber: paymentMethodRadio && paymentMethodRadio.value === 'Cheque' ? chequeNumberInput.value.trim() : null,
-        items: [],
-        labor: (parseFloat(document.getElementById('labor').value) || 0),
-        serviceCall: (parseFloat(document.getElementById('serviceCall').value) || 0),
-        salesTaxRate: parseFloat(document.getElementById('salesTaxRate').value) || 0, 
-        salesTaxAmount: 0,
-        subtotal: 0,
-        total: 0,
+        items: items,
+        
+        // Store all the calculated values
+        customerSubtotal: customerSubtotal,
+        warrantySubtotal: warrantySubtotal,
+        customerLabor: customerLabor,
+        warrantyLabor: warrantyLabor,
+        customerServiceCall: customerServiceCall,
+        warrantyServiceCall: warrantyServiceCall,
+        salesTaxRate: salesTaxRate,
+        customerTax: customerTax,
+        warrantyTax: warrantyTax,
+        totalTax: totalTax,
+        customerTotal: customerTotal,
+        warrantyTotal: warrantyTotal,
+        grandTotal: grandTotal,
+
         status: 'pending', 
         signatureDataURL: confirmedSignatureDataURL, 
         signedBy: confirmedSignatureDataURL ? (document.getElementById('customerName')?.value.trim() || "Customer") : null,
     };
-    let currentSubtotal = 0;
-    document.querySelectorAll('.line-item').forEach(item => {
-        const id = item.id.split('-')[1];
-        const descriptionEl = document.querySelector(`[name=itemDescription-${id}]`);
-        const quantityEl = document.querySelector(`[name=itemQuantity-${id}]`);
-        const priceEl = document.querySelector(`[name=itemPrice-${id}]`);
-        if(descriptionEl && quantityEl && priceEl){
-            const description = descriptionEl.value;
-            const quantity = parseFloat(quantityEl.value) || 0;
-            const price = parseFloat(priceEl.value) || 0;
-            invoiceData.items.push({ description, quantity, price, total: quantity * price });
-            currentSubtotal += quantity * price;
-        }
-    });
-    invoiceData.subtotal = currentSubtotal;
+    
     if (auth.currentUser && auth.currentUser.uid) {
         invoiceData.createdByWorkerId = auth.currentUser.uid;
         invoiceData.workerName = auth.currentUser.displayName || (auth.currentUser.email ? auth.currentUser.email.split('@')[0] : 'N/A');
     }
-    invoiceData.salesTaxAmount = invoiceData.subtotal * (invoiceData.salesTaxRate / 100);
-    invoiceData.total = invoiceData.subtotal + invoiceData.labor + invoiceData.serviceCall + invoiceData.salesTaxAmount;
+
     return invoiceData;
 }
 
