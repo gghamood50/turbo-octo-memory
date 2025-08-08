@@ -1309,7 +1309,7 @@ if(saveInvoiceBtn) {
         pendingInvoices.forEach(invoice => {
             try {
                 // The generatePDF function returns the Base64 string
-                invoice.pdfDataURL = generatePDF(invoice); 
+                invoice.pdfDataURL = generatePDF(invoice, true); // Generate with preview watermark
                 if (!invoice.pdfDataURL) {
                      showMessage(`Warning: Could not generate PDF for the ${invoice.invoiceType} invoice.`, 'info');
                 }
@@ -2185,9 +2185,10 @@ if (sendAllInvoicesBtn) {
             }
             
             const invoicesForWarranty = [...pendingInvoices];
-
-            for (const invoice of invoicesForWarranty) {
-                // This transaction now only handles getting the next invoice number
+            
+            // Use Promise.all to process all invoices concurrently
+            const processedInvoices = await Promise.all(invoicesForWarranty.map(async (invoice) => {
+                // Get a unique invoice number for each invoice
                 await db.runTransaction(async (transaction) => {
                     const counterRef = db.collection('counters').doc('invoiceCounter');
                     const counterDoc = await transaction.get(counterRef);
@@ -2200,27 +2201,29 @@ if (sendAllInvoicesBtn) {
                     transaction.set(counterRef, { lastNumber: nextNumber }, { merge: true });
                 });
 
-                if (invoice.pdfDataURL) {
-                    // Call your deployed HTTP service
+                // Re-generate the PDF with the final invoice number
+                const finalPdfDataURL = generatePDF(invoice, false);
+
+                if (finalPdfDataURL) {
                     const response = await fetch(serviceUrl, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ 
-                            base64Pdf: invoice.pdfDataURL, 
-                            invoiceNumber: invoice.invoiceNumber 
+                        body: JSON.stringify({
+                            base64Pdf: finalPdfDataURL,
+                            invoiceNumber: invoice.invoiceNumber
                         })
                     });
 
                     if (!response.ok) {
                         const errorResult = await response.json();
-                        throw new Error(`PDF upload failed: ${errorResult.error}`);
+                        throw new Error(`PDF upload for #${invoice.invoiceNumber} failed: ${errorResult.error}`);
                     }
-
                     const result = await response.json();
-                    invoice.pdfUrl = result.pdfUrl; // Store the final URL
+                    invoice.pdfUrl = result.pdfUrl;
                 }
-                delete invoice.pdfDataURL; // Clean up the Base64 data
-            }
+                delete invoice.pdfDataURL; // Clean up preview data
+                return invoice;
+            }));
 
             // Update job status and create the warranty record in Firestore
             const batch = db.batch();
@@ -2230,7 +2233,7 @@ if (sendAllInvoicesBtn) {
             const warrantyRef = db.collection('warranties').doc();
             const warrantyData = {
                 job: jobDetails,
-                invoices: invoicesForWarranty, // This array now contains the pdfUrl
+                invoices: processedInvoices, // Use the array of fully processed invoices
                 completionDate: firebase.firestore.FieldValue.serverTimestamp()
             };
             batch.set(warrantyRef, warrantyData);
@@ -2610,9 +2613,8 @@ async function showInvoiceScreen(jobId) {
     }
 }
 
-function generatePDF(invoiceDataForPdf) {
-    console.log("[generatePDF] Starting PDF generation for invoice:", invoiceDataForPdf.invoiceNumber);
-    console.log("[generatePDF] Data received:", invoiceDataForPdf);
+function generatePDF(invoiceDataForPdf, isPreview = false) {
+    console.log(`[generatePDF] Starting PDF generation for invoice: ${invoiceDataForPdf.invoiceNumber}, isPreview: ${isPreview}`);
     if (!invoiceDataForPdf) {
         console.error('[generatePDF] No invoice data provided.');
         return null;
@@ -2684,7 +2686,10 @@ function generatePDF(invoiceDataForPdf) {
             customerName += " (Non-covered)";
         }
         doc.text(customerName, margin, yPos);
-        doc.text(`Invoice #: ${invoiceDataForPdf.invoiceNumber || "N/A"}`, detailsX, yPos);
+        const invoiceNumberText = isPreview 
+            ? "Will be generated when sent to office" 
+            : `${invoiceDataForPdf.invoiceNumber || "N/A"}`;
+        doc.text(`Invoice #: ${invoiceNumberText}`, detailsX, yPos);
         yPos += 5;
         
         const addressLines = doc.splitTextToSize(invoiceDataForPdf.customerAddress || "N/A", (pageWidth / 2) - margin * 2);
@@ -3392,10 +3397,13 @@ function showAfterSendInvoiceScreen() {
                   ></path>
                 </svg>
               </div>
-              <div class="flex flex-col justify-center">
+              <div class="flex flex-col justify-center flex-grow">
                 <p class="text-[#111518] text-base font-medium leading-normal">Invoice for ${invoice.customerName} (${invoice.invoiceType === 'warranty' ? 'Warranty' : 'Non covered'})</p>
                 <p class="text-[#60768a] text-sm font-normal leading-normal">Total: ${formatCurrency(invoice.total)}</p>
               </div>
+              <button class="preview-invoice-btn text-slate-500 hover:text-green-600" data-invoice-index="${index}">
+                <span class="material-icons-outlined">visibility</span>
+              </button>
             </div>
         `;
         pendingInvoicesList.insertAdjacentHTML('beforeend', invoiceCard);
@@ -3405,6 +3413,38 @@ function showAfterSendInvoiceScreen() {
     if (afterSendInvoiceTitle) {
         afterSendInvoiceTitle.textContent = `Invoices for ${customerName}`;
     }
+
+    // PDF Preview Logic
+    const pdfPreviewModal = document.getElementById('pdfPreviewModal');
+    const pdfPreviewFrame = document.getElementById('pdfPreviewFrame');
+    const closePdfPreviewBtn = document.getElementById('closePdfPreview');
+
+    document.querySelectorAll('.preview-invoice-btn').forEach(button => {
+        button.addEventListener('click', () => {
+            const invoiceIndex = button.dataset.invoiceIndex;
+            const invoice = pendingInvoices[invoiceIndex];
+            if (invoice && invoice.pdfDataURL) {
+                pdfPreviewFrame.src = invoice.pdfDataURL;
+                pdfPreviewModal.classList.remove('hidden');
+                pdfPreviewModal.classList.add('flex');
+            } else {
+                showMessage('PDF preview is not available for this invoice.', 'error');
+            }
+        });
+    });
+
+    const closePreviewModal = () => {
+        pdfPreviewModal.classList.add('hidden');
+        pdfPreviewModal.classList.remove('flex');
+        pdfPreviewFrame.src = 'about:blank'; // Clear the iframe
+    };
+
+    closePdfPreviewBtn.addEventListener('click', closePreviewModal);
+    pdfPreviewModal.addEventListener('click', (e) => {
+        if (e.target === pdfPreviewModal) {
+            closePreviewModal();
+        }
+    });
 }
 
 function openWarrantyDetailModal(warranty) {
