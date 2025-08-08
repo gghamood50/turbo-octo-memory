@@ -1004,6 +1004,21 @@
             <!-- Content will be injected here by JavaScript -->
         </div>
     </div>
+
+    <!-- PDF Preview Modal -->
+    <div id="pdfPreviewModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden items-center justify-center">
+        <div class="bg-white rounded-lg shadow-xl w-11/12 h-5/6 max-w-4xl flex flex-col">
+            <div class="flex justify-between items-center p-4 border-b">
+                <h3 class="text-lg font-semibold">Invoice Preview</h3>
+                <button id="closePdfPreview" class="text-slate-500 hover:text-slate-800">
+                    <span class="material-icons-outlined">close</span>
+                </button>
+            </div>
+            <div class="flex-grow p-4">
+                <iframe id="pdfPreviewFrame" class="w-full h-full" frameborder="0"></iframe>
+            </div>
+        </div>
+    </div>
     
     <!-- Fullscreen "All Jobs" Overlay -->
     <div id="allJobsOverlay" class="fullscreen-overlay">
