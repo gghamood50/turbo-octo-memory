@@ -2126,6 +2126,52 @@ if(saveInvoiceBtn) {
         });
     }
 
+// === Send All To Office (Frontend) ===
+// Call this from your "Send all to office" button handler.
+
+// 1) Helper: POST both PDFs to backend, backend will save + write Firestore.
+async function sendAllToOffice(jobId, customerInvoice, warrantyInvoice) {
+  if (!jobId) throw new Error("Missing jobId for warranty upload.");
+
+  // Build items array dynamically (send what exists)
+  const items = [];
+  if (customerInvoice?.base64Pdf && customerInvoice?.invoiceNumber) {
+    items.push({
+      jobId,
+      invoiceId: customerInvoice.invoiceId || null,
+      invoiceNumber: customerInvoice.invoiceNumber,
+      variant: "CUSTOMER",
+      base64Pdf: customerInvoice.base64Pdf
+    });
+  }
+  if (warrantyInvoice?.base64Pdf && warrantyInvoice?.invoiceNumber) {
+    items.push({
+      jobId,
+      invoiceId: warrantyInvoice.invoiceId || null,
+      invoiceNumber: warrantyInvoice.invoiceNumber,
+      variant: "WARRANTY",
+      base64Pdf: warrantyInvoice.base64Pdf
+    });
+  }
+
+  if (items.length === 0) {
+    throw new Error("No PDFs to upload. Generate the invoices first.");
+  }
+
+  const res = await fetch("https://save-pdf-to-storage-216681158749.us-central1.run.app/warranties/upload", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ items })
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || res.statusText || "Upload failed.");
+  }
+
+  return res.json(); // { message, bucket, succeeded, failed }
+}
+
     // Login Form
     const loginForm = document.getElementById('loginForm');
     const loginEmailInput = document.getElementById('loginEmail');
@@ -2174,20 +2220,14 @@ if (sendAllInvoicesBtn) {
         sendAllInvoicesBtn.disabled = true;
         sendAllInvoicesBtn.textContent = 'Processing...';
 
-        // The URL for your deployed Cloud Run service
-        const serviceUrl = "https://save-pdf-to-storage-216681158749.us-central1.run.app"; 
-
         try {
-            const jobDataSource = allJobsData.length > 0 ? allJobsData : currentWorkerAssignedJobs;
-            const jobDetails = jobDataSource.find(j => j.id === currentJobIdForInvoicing);
-            if (!jobDetails) {
-                throw new Error(`Could not find job details. Aborting.`);
+            const jobId = currentJobIdForInvoicing;
+            if (!jobId) {
+                throw new Error("Missing job ID. Cannot send to office.");
             }
-            
-            const invoicesForWarranty = [...pendingInvoices];
-            
-            // Use Promise.all to process all invoices concurrently
-            const processedInvoices = await Promise.all(invoicesForWarranty.map(async (invoice) => {
+
+            // Generate final invoice numbers and PDFs before sending
+            for (const invoice of pendingInvoices) {
                 // Get a unique invoice number for each invoice
                 await db.runTransaction(async (transaction) => {
                     const counterRef = db.collection('counters').doc('invoiceCounter');
@@ -2201,52 +2241,33 @@ if (sendAllInvoicesBtn) {
                     transaction.set(counterRef, { lastNumber: nextNumber }, { merge: true });
                 });
 
-                // Re-generate the PDF with the final invoice number
-                const finalPdfDataURL = generatePDF(invoice, false);
+                // Re-generate the PDF with the final invoice number and no watermark
+                invoice.base64Pdf = generatePDF(invoice, false);
+            }
 
-                if (finalPdfDataURL) {
-                    const response = await fetch(serviceUrl, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            base64Pdf: finalPdfDataURL,
-                            invoiceNumber: invoice.invoiceNumber
-                        })
-                    });
+            // Find the customer and warranty invoices from the processed pendingInvoices
+            const customerInvoice = pendingInvoices.find(inv => inv.invoiceType === 'customer');
+            const warrantyInvoice = pendingInvoices.find(inv => inv.invoiceType === 'warranty');
 
-                    if (!response.ok) {
-                        const errorResult = await response.json();
-                        throw new Error(`PDF upload for #${invoice.invoiceNumber} failed: ${errorResult.error}`);
-                    }
-                    const result = await response.json();
-                    invoice.pdfUrl = result.pdfUrl;
-                }
-                delete invoice.pdfDataURL; // Clean up preview data
-                return invoice;
-            }));
+            if (!customerInvoice?.base64Pdf && !warrantyInvoice?.base64Pdf) {
+                alert("Please generate invoices first.");
+                return;
+            }
 
-            // Update job status and create the warranty record in Firestore
-            const batch = db.batch();
-            const jobRef = db.collection('jobs').doc(currentJobIdForInvoicing);
-            batch.update(jobRef, { status: 'Completed' });
-            
-            const warrantyRef = db.collection('warranties').doc();
-            const warrantyData = {
-                job: jobDetails,
-                invoices: processedInvoices, // Use the array of fully processed invoices
-                completionDate: firebase.firestore.FieldValue.serverTimestamp()
-            };
-            batch.set(warrantyRef, warrantyData);
-            await batch.commit();
-            
-            showMessage('All invoices sent and job finalized!', 'success');
+            const result = await sendAllToOffice(jobId, customerInvoice, warrantyInvoice);
+            console.log("Warranties upload result:", result);
+
+            // The backend handles all Firestore writes now.
+            showMessage("Invoices sent to office and saved to warranties successfully.", 'success');
+
+            // Cleanup local state and return to home screen
             pendingInvoices = [];
             currentJobIdForInvoicing = null;
             showWorkerHomeScreen();
 
-        } catch (error) {
-            console.error("Error sending invoices or finalizing job:", error);
-            showMessage("Error: " + error.message, "error");
+        } catch (err) {
+            console.error("Send all to office failed:", err);
+            showMessage(`Failed to send invoices: ${err.message}`, 'error');
         } finally {
             sendAllInvoicesBtn.disabled = false;
             sendAllInvoicesBtn.textContent = 'Send All Invoices to Office';
