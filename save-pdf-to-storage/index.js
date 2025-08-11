@@ -89,29 +89,31 @@ async function uploadPdfAndGetUrl(filePath, buffer) {
 }
 
 
-/**
- * Adds a new document to the "invoices" collection.
- * This function sets the 'invoiceType' field based on the 'variant'.
- */
 async function addInvoiceToCollection({
-  jobId,
-  variant,
-  invoiceId,
-  invoiceNumber,
-  url,
-  filePath,
-  filename,
+    jobId,
+    variant,
+    invoiceId,
+    invoiceNumber,
+    url,
+    filePath,
+    filename,
+    invoiceData
 }) {
+    // Merge the provided invoice data with the file metadata
     const docData = {
+        ...invoiceData, // Spread all fields from the form
         jobId,
         invoiceId: invoiceId || null,
         invoiceNumber,
-        invoiceType: variant, // Sets 'invoiceType' to 'CUSTOMER' or 'WARRANTY'
+        invoiceType: variant, // Overwrite invoiceType to ensure it's 'CUSTOMER' or 'WARRANTY'
         url,
         path: filePath,
         filename,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
     };
+
+    // Remove the base64 PDF from the data before saving to Firestore
+    delete docData.base64Pdf;
 
     // Add a new document with a generated ID to the "invoices" collection.
     await firestore.collection("invoices").add(docData);
@@ -144,6 +146,7 @@ app.post("/warranties/upload", async (req, res) => {
         return res.status(400).send({ error: `Item ${i}: 'variant' must be 'CUSTOMER' or 'WARRANTY'.` });
       }
       if (!item.base64Pdf) return res.status(400).send({ error: `Item ${i}: 'base64Pdf' is required.` });
+      if (!item.invoiceData) return res.status(400).send({ error: `Item ${i}: 'invoiceData' is required.` });
     }
 
     const results = await Promise.all(
@@ -167,6 +170,7 @@ app.post("/warranties/upload", async (req, res) => {
             url,
             filePath: path,
             filename,
+            invoiceData: item.invoiceData || {}, // Pass the full invoice data object here
           });
 
 
