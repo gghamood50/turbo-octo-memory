@@ -191,7 +191,9 @@ function renderJobs(jobs) {
         } else { // Covers 'Awaiting completion' and 'Completed'
              if (statusText === 'Awaiting completion') statusClass = 'status-awaiting-completion';
              if (statusText === 'Completed') statusClass = 'status-completed';
-             actionsHtml = `<button class="btn-secondary-stitch view-job-details-btn" data-id="${job.id}">View Details</button>`; // Assume you'll have a generic details view
+             // Use the 'schedule-job-btn' class so the existing event handler catches it.
+             // The modal it opens is for viewing/rescheduling, which is appropriate.
+             actionsHtml = `<button class="btn-secondary-stitch schedule-job-btn" data-id="${job.id}">View Details</button>`;
         }
 
         return `
@@ -201,7 +203,7 @@ function renderJobs(jobs) {
                 <td>${job.issue || 'N/A'}</td>
                 <td>${job.phone || 'N/A'}</td>
                 <td><span class="status-pill ${statusClass}">${statusText}</span></td>
-                <td class="flex gap-2">${actionsHtml}</td>
+                <td>${actionsHtml}</td>
             </tr>
         `;
     }).join('');
