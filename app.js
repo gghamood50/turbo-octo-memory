@@ -2172,7 +2172,6 @@ if(saveInvoiceBtn) {
 // === Send All To Office (Frontend) ===
 // Call this from your "Send all to office" button handler.
 
-// 1) Helper: POST both PDFs to backend, backend will save + write Firestore.
 async function sendAllToOffice(jobId, customerInvoice, warrantyInvoice) {
   if (!jobId) throw new Error("Missing jobId for warranty upload.");
 
@@ -2184,7 +2183,8 @@ async function sendAllToOffice(jobId, customerInvoice, warrantyInvoice) {
       invoiceId: customerInvoice.invoiceId || null,
       invoiceNumber: customerInvoice.invoiceNumber,
       variant: "CUSTOMER",
-      base64Pdf: customerInvoice.base64Pdf
+      base64Pdf: customerInvoice.base64Pdf,
+      invoiceData: customerInvoice, // <-- Add the full customer invoice object
     });
   }
   if (warrantyInvoice?.base64Pdf && warrantyInvoice?.invoiceNumber) {
@@ -2193,7 +2193,8 @@ async function sendAllToOffice(jobId, customerInvoice, warrantyInvoice) {
       invoiceId: warrantyInvoice.invoiceId || null,
       invoiceNumber: warrantyInvoice.invoiceNumber,
       variant: "WARRANTY",
-      base64Pdf: warrantyInvoice.base64Pdf
+      base64Pdf: warrantyInvoice.base64Pdf,
+      invoiceData: warrantyInvoice, // <-- Add the full warranty invoice object
     });
   }
 
