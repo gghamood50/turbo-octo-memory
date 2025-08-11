@@ -74,6 +74,10 @@
                     <a class="nav-link text-slate-700 hover:text-green-700 flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium leading-normal transition-colors" href="#" data-target="inventory">
                         <span class="material-icons-outlined text-xl">inventory_2</span>Inventory
                     </a>
+                    <a class="nav-link text-slate-700 hover:text-green-700 flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium leading-normal transition-colors" href="#" data-target="warranty">
+                        <span class="material-icons-outlined text-xl">verified_user</span>Warranty
+                    </a>
+                    </a>
                     <a class="nav-link text-slate-700 hover:text-green-700 flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium leading-normal transition-colors" href="#" data-target="daniel">
                         <span class="material-icons-outlined text-xl">smart_toy</span>Daniel (AI)
                     </a>
@@ -282,6 +286,64 @@
                                     </tbody>
                                 </table>
                             </div>
+                        </div>
+                    </section>
+                    <section id="warranty" class="content-section hidden">
+                        <div class="flex flex-col items-start justify-between gap-2 md:flex-row md:items-center">
+                            <div><h1 class="text-slate-900 text-3xl font-bold leading-tight tracking-tight">Invoice Management</h1><p class="text-slate-600 text-base font-normal leading-normal">Review financial performance and details for all completed jobs.</p></div>
+                             <!-- Filter Button & Pop-up Container -->
+                            <div class="relative">
+                                <button id="dateFilterToggle" class="date-filter-btn flex items-center gap-2">
+                                    <span class="material-icons-outlined text-xl">filter_list</span>
+                                    <span id="activeFilterDisplay">All Time</span>
+                                </button>
+                                <div id="dateFilterPopup" class="date-filter-popup">
+                                    <div class="p-4 space-y-4">
+                                        <div>
+                                            <p class="text-sm font-semibold text-slate-600 mb-2">Quick Ranges</p>
+                                            <div id="date-filter-presets" class="grid grid-cols-2 gap-2">
+                                                <button class="date-filter-btn text-xs" data-range="7">Last 7 Days</button>
+                                                <button class="date-filter-btn text-xs" data-range="30">Last 30 Days</button>
+                                                <button class="date-filter-btn text-xs" data-range="365">Last Year</button>
+                                                <button class="date-filter-btn text-xs active" data-range="all">All Time</button>
+                                            </div>
+                                        </div>
+                                        <hr/>
+                                        <div>
+                                            <p class="text-sm font-semibold text-slate-600 mb-2">Custom Range</p>
+                                            <div class="space-y-2">
+                                                <div class="flex items-center gap-2 text-sm"><label for="dateFrom" class="w-12">From:</label><input type="date" id="dateFrom" class="form-input text-sm p-1.5 rounded-md border-slate-300 w-full"></div>
+                                                <div class="flex items-center gap-2 text-sm"><label for="dateTo" class="w-12">To:</label><input type="date" id="dateTo" class="form-input text-sm p-1.5 rounded-md border-slate-300 w-full"></div>
+                                                <button id="applyDateRange" class="date-filter-btn bg-green-600 text-white w-full mt-2">Apply</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Stat cards -->
+                        <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 mt-6">
+                            <div class="stat-card-stitch"><div class="flex items-center justify-between"><p class="text-slate-700 text-base font-medium leading-normal">Total Invoices</p><span class="material-icons-outlined text-xl text-sky-500">receipt_long</span></div><p class="text-slate-900 text-4xl font-bold leading-tight tracking-tight" id="statsTotalInvoices">0</p></div>
+                            <div class="stat-card-stitch"><div class="flex items-center justify-between"><p class="text-slate-700 text-base font-medium leading-normal">Unclaimed Invoices</p><span class="material-icons-outlined text-xl text-amber-500">hourglass_top</span></div><p class="text-slate-900 text-4xl font-bold leading-tight tracking-tight" id="statsUnclaimedInvoices">0</p></div>
+                            <div class="stat-card-stitch"><div class="flex items-center justify-between"><p class="text-slate-700 text-base font-medium leading-normal">Claimed Invoices</p><span class="material-icons-outlined text-xl text-green-500">task_alt</span></div><p class="text-slate-900 text-4xl font-bold leading-tight tracking-tight" id="statsClaimedInvoices">0</p></div>
+                            <div class="stat-card-stitch"><div class="flex items-center justify-between"><p class="text-slate-700 text-base font-medium leading-normal">Value of Claimed</p><span class="material-icons-outlined text-xl text-purple-500">paid</span></div><p class="text-slate-900 text-4xl font-bold leading-tight tracking-tight" id="statsClaimedValue">$0.00</p></div>
+                        </div>
+
+                        <!-- Interactive Warranty Provider Cards -->
+                        <div id="provider-cards-container" class="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
+                            <div class="stat-card-stitch provider-card" data-provider="First American"><div class="provider-card-content"><h3 class="provider-card-title">First American</h3><p id="firstAmericanStats" class="provider-card-stats">0</p><p class="provider-card-subtext">Invoices</p></div></div>
+                            <div class="stat-card-stitch provider-card" data-provider="Home Guard"><div class="provider-card-content"><h3 class="provider-card-title">Home Guard</h3><p id="homeGuardStats" class="provider-card-stats">0</p><p class="provider-card-subtext">Invoices</p></div></div>
+                            <div class="stat-card-stitch provider-card" data-provider="Others"><div class="provider-card-content"><h3 class="provider-card-title">Others</h3><p id="othersStats" class="provider-card-stats">0</p><p class="provider-card-subtext">Invoices</p></div></div>
+                        </div>
+
+                        <!-- "Completed Jobs & Invoices" section -->
+                        <div class="mt-6 flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+                            <div class="flex justify-between items-center">
+                                <h3 id="invoiceTableTitle" class="text-slate-800 text-lg font-semibold leading-normal">Latest 5 Completed Jobs</h3>
+                                <button id="viewAllInvoicesBtn" class="font-semibold text-sm text-green-600 hover:text-green-700 transition-colors" style="display: none;">View All</button>
+                            </div>
+                            <div class="overflow-x-auto"><table id="warrantyTable" class="custom-table"><thead><tr><th>Customer</th><th>Address</th><th>Completion Date</th><th>Technician</th><th>Actions</th></tr></thead><tbody id="warrantyTableBody"><tr><td colspan="5" class="text-center text-slate-500 py-4">Loading invoices...</td></tr></tbody></table></div>
                         </div>
                     </section>
                     <section id="daniel" class="content-section hidden bg-gradient-to-br from-slate-50 via-green-50 to-slate-50 p-0 m-0 flex flex-col" style="height: calc(100vh - 160px);"> 
@@ -844,6 +906,63 @@
     <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.0.0/dist/signature_pad.umd.min.js"></script>
     <script src="app.js"></script>
 
+    <div id="warrantyDetailModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalJobTitle">Invoice & Job Details</h2>
+                <span class="close-button">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- Customer Info Card -->
+                    <div class="bg-slate-50 p-4 rounded-lg border">
+                        <h3 class="font-semibold text-slate-800 mb-3 text-base border-b pb-2">Customer Information</h3>
+                        <div class="space-y-3 text-sm">
+                            <div class="flex items-center"><span class="material-icons-outlined text-slate-500 mr-3">person</span><span id="modalWarrantyCustomerName">N/A</span></div>
+                            <div class="flex items-center"><span class="material-icons-outlined text-slate-500 mr-3">home</span><span id="modalWarrantyAddress">N/A</span></div>
+                            <div class="flex items-center"><span class="material-icons-outlined text-slate-500 mr-3">phone</span><span id="modalWarrantyPhone">N/A</span></div>
+                        </div>
+                    </div>
+                    <!-- Job Details Card -->
+                    <div class="bg-slate-50 p-4 rounded-lg border">
+                        <h3 class="font-semibold text-slate-800 mb-3 text-base border-b pb-2">Job Details</h3>
+                        <div class="space-y-3 text-sm">
+                            <div class="flex items-center"><span class="material-icons-outlined text-slate-500 mr-3">event</span><span id="modalWarrantyCompletionDate">N/A</span></div>
+                            <div class="flex items-center"><span class="material-icons-outlined text-slate-500 mr-3">badge</span><span id="modalWarrantyTechnician">N/A</span></div>
+                            <div class="flex items-center"><span class="material-icons-outlined text-slate-500 mr-3">confirmation_number</span><span id="modalWarrantyDispatchOrPoNumber">N/A</span></div>
+                        </div>
+                    </div>
+                    <!-- Warranty & Plan Card -->
+                    <div class="bg-slate-50 p-4 rounded-lg border md:col-span-2">
+                         <h3 class="font-semibold text-slate-800 mb-3 text-base border-b pb-2">Warranty & Plan</h3>
+                         <div class="grid grid-cols-2 gap-4 text-sm">
+                            <div><strong>Provider:</strong> <span id="modalWarrantyProvider">N/A</span></div>
+                            <div><strong>Plan Type:</strong> <span id="modalWarrantyPlanType">N/A</span></div>
+                         </div>
+                    </div>
+                </div>
+                <hr class="my-6">
+                <h3 class="text-lg font-semibold mb-2">Associated Invoices</h3>
+                <div id="modalWarrantyInvoicesContainer" class="space-y-2"></div>
+                
+                <!-- Customer Scheduling Link Section -->
+                <hr class="my-6">
+                <div id="warrantyModalLinkContainer" class="hidden">
+                    <h3 class="text-lg font-semibold mb-2">Customer Scheduling Link</h3>
+                    <p class="text-sm text-slate-600 mb-2">Share this link with the customer for any follow-up appointments.</p>
+                    <div class="flex gap-2">
+                        <input type="text" id="warrantyModalLinkInput" readonly class="form-input bg-slate-100 w-full">
+                        <button type="button" id="warrantyModalCopyBtn" class="btn-secondary-stitch">
+                            <span class="material-icons-outlined text-lg">content_copy</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary-stitch close-button">Close</button>
+            </div>
+        </div>
+    </div>
     
     <!-- Fullscreen Claims Processing Workspace -->
     <div id="providerInvoiceListOverlay" class="fullscreen-overlay">
