@@ -2259,6 +2259,12 @@ if (sendAllInvoicesBtn) {
             const result = await sendAllToOffice(jobId, customerInvoice, warrantyInvoice);
             console.log("Warranties upload result:", result);
 
+            // --- FIX: Update the job status to 'Completed' ---
+            await db.collection('jobs').doc(jobId).update({
+                status: 'Completed'
+            });
+            // --- END FIX ---
+
             // The backend handles all Firestore writes now.
             showMessage("Invoices sent to office and saved to warranties successfully.", 'success');
 
@@ -3124,6 +3130,8 @@ function updateTotals() {
 
     // Calculate sales tax
     const taxRate = salesTaxRateInput ? (parseFloat(salesTaxRateInput.value) || 0) : 0;
+    
+    // --- NEW LOGIC: Tax is applied only to parts/items for both customer and warranty. ---
     const customerTax = customerSubtotal * (taxRate / 100);
     const warrantyTax = warrantySubtotal * (taxRate / 100);
     const totalTax = customerTax + warrantyTax;
@@ -3316,7 +3324,8 @@ function collectInvoiceData() {
         subtotal: customerItems.reduce((acc, item) => acc + item.total, 0),
         status: 'pending',
     };
-    customerInvoice.salesTaxAmount = (customerInvoice.subtotal + customerInvoice.labor + customerInvoice.serviceCall) * (customerInvoice.salesTaxRate / 100);
+    // --- NEW LOGIC: Tax is applied only to parts/items ---
+    customerInvoice.salesTaxAmount = customerInvoice.subtotal * (customerInvoice.salesTaxRate / 100);
     customerInvoice.total = customerInvoice.subtotal + customerInvoice.labor + customerInvoice.serviceCall + customerInvoice.salesTaxAmount;
 
     const warrantyInvoice = {
@@ -3328,8 +3337,9 @@ function collectInvoiceData() {
         subtotal: warrantyItems.reduce((acc, item) => acc + item.total, 0),
         status: 'pending',
     };
-    warrantyInvoice.salesTaxAmount = 0; // Typically no tax on warranty claims
-    warrantyInvoice.total = warrantyInvoice.subtotal + warrantyInvoice.labor + warrantyInvoice.serviceCall;
+    // --- NEW LOGIC: Tax is applied only to parts/items ---
+    warrantyInvoice.salesTaxAmount = warrantyInvoice.subtotal * (warrantyInvoice.salesTaxRate / 100);
+    warrantyInvoice.total = warrantyInvoice.subtotal + warrantyInvoice.labor + warrantyInvoice.serviceCall + warrantyInvoice.salesTaxAmount;
 
     // --- 4. ADD TO PENDING INVOICES ---
     // We only add invoices that have items or fees.
