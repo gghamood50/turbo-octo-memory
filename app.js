@@ -3283,6 +3283,9 @@ function collectInvoiceData() {
         salesTaxRate: parseFloat(document.getElementById('salesTaxRate').value) || 0,
         signatureDataURL: confirmedSignatureDataURL,
         signedBy: confirmedSignatureDataURL ? (document.getElementById('customerName')?.value.trim() || "Customer") : null,
+        selectedCountyTax: selectedCountyValue,
+        planType: document.getElementById('planType').value,
+        warrantyName: document.getElementById('warrantyName').value,
     };
      if (auth.currentUser && auth.currentUser.uid) {
         baseData.createdByWorkerId = auth.currentUser.uid;
@@ -3453,30 +3456,43 @@ function showAfterSendInvoiceScreen() {
     const closePdfPreviewBtn = document.getElementById('closePdfPreview');
 
     document.querySelectorAll('.preview-invoice-btn').forEach(button => {
-        button.addEventListener('click', () => {
+        button.addEventListener('click', async () => { // Make the listener async
             const invoiceIndex = button.dataset.invoiceIndex;
             const invoice = pendingInvoices[invoiceIndex];
             if (invoice && invoice.pdfDataURL) {
-                pdfPreviewFrame.src = invoice.pdfDataURL;
-                pdfPreviewModal.classList.remove('hidden');
-                pdfPreviewModal.classList.add('flex');
+                try {
+                    // Convert data URI to blob
+                    const response = await fetch(invoice.pdfDataURL);
+                    const blob = await response.blob();
+                    const objectUrl = URL.createObjectURL(blob);
+                    
+                    pdfPreviewFrame.src = objectUrl;
+                    
+                    const closePreviewModal = () => {
+                        URL.revokeObjectURL(objectUrl); // Clean up the object URL to prevent memory leaks
+                        pdfPreviewModal.classList.add('hidden');
+                        pdfPreviewModal.classList.remove('flex');
+                        pdfPreviewFrame.src = 'about:blank';
+                    };
+
+                    closePdfPreviewBtn.addEventListener('click', closePreviewModal, { once: true });
+                    pdfPreviewModal.addEventListener('click', (e) => {
+                        if (e.target === pdfPreviewModal) {
+                            closePreviewModal();
+                        }
+                    }, { once: true });
+
+
+                    pdfPreviewModal.classList.remove('hidden');
+                    pdfPreviewModal.classList.add('flex');
+                } catch (error) {
+                    console.error("Error creating PDF preview:", error);
+                    showMessage('Could not generate PDF preview.', 'error');
+                }
             } else {
                 showMessage('PDF preview is not available for this invoice.', 'error');
             }
         });
-    });
-
-    const closePreviewModal = () => {
-        pdfPreviewModal.classList.add('hidden');
-        pdfPreviewModal.classList.remove('flex');
-        pdfPreviewFrame.src = 'about:blank'; // Clear the iframe
-    };
-
-    closePdfPreviewBtn.addEventListener('click', closePreviewModal);
-    pdfPreviewModal.addEventListener('click', (e) => {
-        if (e.target === pdfPreviewModal) {
-            closePreviewModal();
-        }
     });
 }
 
