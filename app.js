@@ -37,6 +37,7 @@ let currentlySelectedWorker = null;
 let pendingInvoices = [];
 let currentJobIdForInvoicing = null;
 let allWarrantiesData = [];
+let allInvoicesData = [];
 let currentProvider = null;
 let currentFilteredData = [];
 
@@ -204,6 +205,36 @@ function renderJobs(jobs) {
                 <td>${job.phone || 'N/A'}</td>
                 <td><span class="status-pill ${statusClass}">${statusText}</span></td>
                 <td>${actionsHtml}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function renderInvoices(invoices) {
+    const invoicesTableBody = document.getElementById('invoicesTableBody');
+    if (!invoicesTableBody) return;
+
+    invoicesTableBody.innerHTML = '';
+
+    if (invoices.length === 0) {
+        invoicesTableBody.innerHTML = `<tr><td colspan="7" class="text-center text-slate-500 py-4">No invoices found.</td></tr>`;
+        return;
+    }
+
+    const sortedInvoices = [...invoices].sort((a, b) => (b.createdAt?.toDate() || 0) - (a.createdAt?.toDate() || 0));
+
+    invoicesTableBody.innerHTML = sortedInvoices.map(invoice => {
+        const invoiceDate = invoice.createdAt?.toDate().toLocaleDateString() || 'N/A';
+        const statusClass = invoice.status === 'paid' ? 'status-completed' : 'status-needs-scheduling';
+        return `
+            <tr>
+                <td class="font-medium text-slate-800">${invoice.invoiceNumber || 'N/A'}</td>
+                <td>${invoice.customerName || 'N/A'}</td>
+                <td>${invoiceDate}</td>
+                <td><span class="status-pill ${(invoice.invoiceType || '').toLowerCase() === 'warranty' ? 'status-awaiting-completion' : 'status-link-sent'}">${invoice.invoiceType || 'N/A'}</span></td>
+                <td>${formatCurrency(invoice.total)}</td>
+                <td><span class="status-pill ${statusClass}">${invoice.status || 'N/A'}</span></td>
+                <td><button class="btn-secondary-stitch view-invoice-btn" data-id="${invoice.id}">View Details</button></td>
             </tr>
         `;
     }).join('');
@@ -524,6 +555,16 @@ function listenForWarranties() {
         updateDashboard(allWarrantiesData);
     }, (error) => {
         console.error("Error listening for warranties:", error);
+    });
+}
+
+function listenForAllInvoices() {
+    const invoicesQuery = firebase.firestore().collection("invoices").orderBy("createdAt", "desc");
+    invoicesQuery.onSnapshot((snapshot) => {
+        allInvoicesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        renderInvoices(allInvoicesData);
+    }, (error) => {
+        console.error("Error listening for all invoices:", error);
     });
 }
 
@@ -2316,6 +2357,7 @@ if (sendAllInvoicesBtn) {
                         initializeInventory().then(listenForInventoryItems);
                         listenForDashboardData();
                         listenForWarranties();
+                        listenForAllInvoices();
                         if (tripSheetDateInput.value) {
                            loadTripSheetsForDate(tripSheetDateInput.value);
                         }
