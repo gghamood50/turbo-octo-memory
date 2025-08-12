@@ -43,6 +43,7 @@ let currentFilteredData = [];
 
 
 // --- DOM Elements ---
+const invoiceSearchInput = document.getElementById('invoiceSearchInput');
 const loginScreen = document.getElementById('loginScreen');
 const workerHomeScreen = document.getElementById('workerHomeScreen');
 const adminHomeScreen = document.getElementById('adminHomeScreen');
@@ -208,6 +209,34 @@ function renderJobs(jobs) {
             </tr>
         `;
     }).join('');
+}
+
+function filterInvoices() {
+    const searchInput = invoiceSearchInput.value.toLowerCase();
+    const searchTerms = searchInput.split(',').map(term => term.trim()).filter(term => term);
+
+    if (searchTerms.length === 0) {
+        renderInvoices(allInvoicesData);
+        return;
+    }
+
+    const filteredInvoices = allInvoicesData.filter(invoice => {
+        // For each invoice, check if all search terms are found
+        return searchTerms.every(term => {
+            const invoiceDate = invoice.createdAt?.toDate().toLocaleDateString().toLowerCase() || '';
+            // Check if the current term is found in any of the fields
+            return (
+                (invoice.invoiceNumber && invoice.invoiceNumber.toLowerCase().includes(term)) ||
+                (invoice.customerName && invoice.customerName.toLowerCase().includes(term)) ||
+                (invoiceDate.includes(term)) ||
+                (invoice.poNumber && invoice.poNumber.toLowerCase().includes(term)) ||
+                (invoice.customerAddress && invoice.customerAddress.toLowerCase().includes(term)) ||
+                (invoice.customerPhone && invoice.customerPhone.toLowerCase().includes(term))
+            );
+        });
+    });
+
+    renderInvoices(filteredInvoices);
 }
 
 function renderInvoices(invoices) {
@@ -1535,6 +1564,10 @@ if(saveInvoiceBtn) {
         }, 500); 
     });
     if(addWorkerForm) addWorkerForm.addEventListener('submit', handleAddWorker);
+
+    if (invoiceSearchInput) {
+        invoiceSearchInput.addEventListener('input', filterInvoices);
+    }
 
     // Modal Close/Cancel Buttons
     if(closeEditTechModalBtn) closeEditTechModalBtn.addEventListener('click', closeEditTechModal);
