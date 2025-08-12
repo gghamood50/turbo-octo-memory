@@ -416,20 +416,34 @@ function updateDashboard(data) {
     renderWarranties(data);
 }
 
-function renderInvoiceStats(warranties) {
-    const statsTotalInvoices = document.getElementById('statsTotalInvoices');
-    const statsUnclaimedInvoices = document.getElementById('statsUnclaimedInvoices');
-    const statsClaimedInvoices = document.getElementById('statsClaimedInvoices');
-    const statsClaimedValue = document.getElementById('statsClaimedValue');
-    let total = 0, unclaimed = 0, claimed = 0, value = 0;
-    if (warranties) warranties.forEach(w => w.invoices?.forEach(inv => {
-        total++;
-        inv.status === 'paid' ? (claimed++, value += inv.total || 0) : unclaimed++;
-    }));
-    if (statsTotalInvoices) statsTotalInvoices.textContent = total;
-    if (statsUnclaimedInvoices) statsUnclaimedInvoices.textContent = unclaimed;
-    if (statsClaimedInvoices) statsClaimedInvoices.textContent = claimed;
-    if (statsClaimedValue) statsClaimedValue.textContent = formatCurrency(value);
+function renderInvoiceDashboard(invoices) {
+    const statsTotalInvoices = document.getElementById('inv_statsTotalInvoices');
+    const statsWarrantyInvoices = document.getElementById('inv_statsWarrantyInvoices');
+    const statsCustomerInvoices = document.getElementById('inv_statsCustomerInvoices');
+    const statsTotalValue = document.getElementById('inv_statsTotalValue');
+
+    let totalCount = 0;
+    let warrantyCount = 0;
+    let customerCount = 0;
+    let totalValue = 0;
+
+    if (invoices) {
+        totalCount = invoices.length;
+        invoices.forEach(inv => {
+            const type = inv.invoiceType ? inv.invoiceType.toLowerCase() : '';
+            if (type === 'warranty') {
+                warrantyCount++;
+            } else if (type === 'customer') {
+                customerCount++;
+            }
+            totalValue += inv.total || 0;
+        });
+    }
+
+    if (statsTotalInvoices) statsTotalInvoices.textContent = totalCount;
+    if (statsWarrantyInvoices) statsWarrantyInvoices.textContent = warrantyCount;
+    if (statsCustomerInvoices) statsCustomerInvoices.textContent = customerCount;
+    if (statsTotalValue) statsTotalValue.textContent = formatCurrency(totalValue);
 }
 
 function renderProviderCardCounts(warranties) {
@@ -548,6 +562,117 @@ function openAllJobsOverlay(warranties, technicianName = 'All Technicians') {
     allJobsOverlay.classList.add('is-visible');
 }
 
+function openTechnicianInvoicesOverlay(technicianName) {
+    const overlay = document.getElementById('technicianInvoicesOverlay');
+    const title = document.getElementById('technicianInvoicesTitle');
+    const tableBody = document.getElementById('technicianInvoicesTableBody');
+    const searchInput = document.getElementById('technicianInvoicesSearchInput');
+
+    if (!overlay || !title || !tableBody || !searchInput) return;
+
+    title.textContent = `Invoices for ${technicianName}`;
+    const filteredInvoices = allInvoicesData.filter(inv => inv.workerName && inv.workerName.toLowerCase() === technicianName.toLowerCase());
+    
+    renderTechnicianInvoices(filteredInvoices, tableBody);
+
+    searchInput.value = '';
+    searchInput.oninput = () => {
+        const searchTerm = searchInput.value.toLowerCase();
+        const searchFilteredInvoices = filteredInvoices.filter(invoice => {
+            return (
+                (invoice.invoiceNumber && invoice.invoiceNumber.toLowerCase().includes(searchTerm)) ||
+                (invoice.customerName && invoice.customerName.toLowerCase().includes(searchTerm)) ||
+                (invoice.customerAddress && invoice.customerAddress.toLowerCase().includes(searchTerm))
+            );
+        });
+        renderTechnicianInvoices(searchFilteredInvoices, tableBody);
+    };
+
+    overlay.classList.add('is-visible');
+}
+
+function renderTechnicianInvoices(invoices, tableBody) {
+    if (!tableBody) return;
+    tableBody.innerHTML = '';
+
+    if (invoices.length === 0) {
+        tableBody.innerHTML = `<tr><td colspan="7" class="text-center text-slate-500 py-4">No invoices found for this technician.</td></tr>`;
+        return;
+    }
+
+    const sortedInvoices = [...invoices].sort((a, b) => (b.createdAt?.toDate() || 0) - (a.createdAt?.toDate() || 0));
+
+    tableBody.innerHTML = sortedInvoices.map(invoice => {
+        const invoiceDate = invoice.createdAt?.toDate().toLocaleDateString() || 'N/A';
+        const statusClass = invoice.status === 'paid' ? 'status-completed' : 'status-needs-scheduling';
+        return `
+            <tr>
+                <td class="font-medium text-slate-800">${invoice.invoiceNumber || 'N/A'}</td>
+                <td>${invoice.customerName || 'N/A'}</td>
+                <td>${invoiceDate}</td>
+                <td><span class="status-pill ${invoice.invoiceType.toLowerCase() === 'warranty' ? 'status-awaiting-completion' : 'status-link-sent'}">${invoice.invoiceType || 'N/A'}</span></td>
+                <td>${formatCurrency(invoice.total)}</td>
+                <td><span class="status-pill ${statusClass}">${invoice.status || 'N/A'}</span></td>
+                <td><button class="btn-secondary-stitch view-invoice-btn" data-id="${invoice.id}">View Details</button></td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function openAllInvoicesOverlay() {
+    const overlay = document.getElementById('allInvoicesListOverlay');
+    const title = document.getElementById('allInvoicesListTitle');
+    const tableBody = document.getElementById('allInvoicesListTableBody');
+    const searchInput = document.getElementById('allInvoicesListSearchInput');
+
+    if (!overlay || !title || !tableBody || !searchInput) return;
+
+    title.textContent = `All Invoices (${allInvoicesData.length})`;
+    
+    renderTechnicianInvoices(allInvoicesData, tableBody);
+
+    searchInput.value = '';
+    searchInput.oninput = () => {
+        const searchTerm = searchInput.value.toLowerCase();
+        const searchFilteredInvoices = allInvoicesData.filter(invoice => {
+            return (
+                (invoice.invoiceNumber && invoice.invoiceNumber.toLowerCase().includes(searchTerm)) ||
+                (invoice.customerName && invoice.customerName.toLowerCase().includes(searchTerm)) ||
+                (invoice.customerAddress && invoice.customerAddress.toLowerCase().includes(searchTerm))
+            );
+        });
+        renderTechnicianInvoices(searchFilteredInvoices, tableBody);
+    };
+
+    overlay.classList.add('is-visible');
+}
+
+function openInvoiceTechnicianSelectionOverlay() {
+    const overlay = document.getElementById('invoiceTechnicianSelectionOverlay');
+    const cardsContainer = document.getElementById('invoiceTechnicianSelectionCards');
+    if (!overlay || !cardsContainer) return;
+
+    cardsContainer.innerHTML = `
+        <div class="tech-selection-card" data-technician="All Invoices">
+            <span class="material-icons-outlined text-5xl text-green-600 mb-2">receipt_long</span>
+            <h3 class="text-xl font-bold text-slate-800">View All Invoices</h3>
+        </div>
+    `;
+
+    allTechniciansData.forEach(tech => {
+        const card = document.createElement('div');
+        card.className = 'tech-selection-card';
+        card.dataset.technician = tech.name;
+        card.innerHTML = `
+            <span class="material-icons-outlined text-5xl text-green-600 mb-2">person</span>
+            <h3 class="text-xl font-bold text-slate-800">${tech.name}</h3>
+        `;
+        cardsContainer.appendChild(card);
+    });
+
+    overlay.classList.add('is-visible');
+}
+
 function openTechnicianSelectionOverlay() {
     const container = document.getElementById('technicianSelectionCards');
     const technicianSelectionOverlay = document.getElementById('technicianSelectionOverlay');
@@ -591,7 +716,8 @@ function listenForAllInvoices() {
     const invoicesQuery = firebase.firestore().collection("invoices").orderBy("createdAt", "desc");
     invoicesQuery.onSnapshot((snapshot) => {
         allInvoicesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        renderInvoices(allInvoicesData);
+        renderInvoiceDashboard(allInvoicesData);
+        renderInvoices(allInvoicesData.slice(0, 5)); // Initially show only the first 5
     }, (error) => {
         console.error("Error listening for all invoices:", error);
     });
@@ -1154,6 +1280,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const modalWorkerCloseBtn = document.getElementById('modalWorkerCloseBtn');
     const modalRemoveWorkerBtn = document.getElementById('modalRemoveWorkerBtn');
     const showAllInvoicesBtn = document.getElementById('showAllInvoicesBtn');
+if(showAllInvoicesBtn) {
+    showAllInvoicesBtn.addEventListener('click', () => {
+        openInvoiceTechnicianSelectionOverlay();
+    });
+}
     const backToWorkerSelectBtn = document.getElementById('backToWorkerSelectBtn');
     const filterTabs = document.querySelectorAll('#adminInvoicesScreen .filter-tabs button');
     const invoiceYearFilter = document.getElementById('invoiceYearFilter');
@@ -1865,6 +1996,46 @@ if(saveInvoiceBtn) {
     const technicianSelectionCloseBtn = document.getElementById('technicianSelectionCloseBtn');
     if (technicianSelectionCloseBtn) {
         technicianSelectionCloseBtn.addEventListener('click', () => closeOverlay(technicianSelectionOverlay));
+    }
+
+    const invoiceTechnicianSelectionOverlay = document.getElementById('invoiceTechnicianSelectionOverlay');
+    const invoiceTechnicianSelectionCloseBtn = document.getElementById('invoiceTechnicianSelectionCloseBtn');
+    if (invoiceTechnicianSelectionCloseBtn) {
+        invoiceTechnicianSelectionCloseBtn.addEventListener('click', () => closeOverlay(invoiceTechnicianSelectionOverlay));
+    }
+
+    const technicianInvoicesOverlay = document.getElementById('technicianInvoicesOverlay');
+    const technicianInvoicesCloseBtn = document.getElementById('technicianInvoicesCloseBtn');
+    if (technicianInvoicesCloseBtn) {
+        technicianInvoicesCloseBtn.addEventListener('click', () => {
+            closeOverlay(technicianInvoicesOverlay);
+            openInvoiceTechnicianSelectionOverlay();
+        });
+    }
+
+    const allInvoicesListOverlay = document.getElementById('allInvoicesListOverlay');
+    const allInvoicesListCloseBtn = document.getElementById('allInvoicesListCloseBtn');
+    if (allInvoicesListCloseBtn) {
+        allInvoicesListCloseBtn.addEventListener('click', () => {
+            closeOverlay(allInvoicesListOverlay);
+            openInvoiceTechnicianSelectionOverlay();
+        });
+    }
+
+    const invoiceTechnicianSelectionCards = document.getElementById('invoiceTechnicianSelectionCards');
+    if (invoiceTechnicianSelectionCards) {
+        invoiceTechnicianSelectionCards.addEventListener('click', (event) => {
+            const card = event.target.closest('.tech-selection-card');
+            if (card) {
+                const techName = card.dataset.technician;
+                closeOverlay(document.getElementById('invoiceTechnicianSelectionOverlay'));
+                if (techName === 'All Invoices') {
+                openAllInvoicesOverlay();
+                } else {
+                    openTechnicianInvoicesOverlay(techName);
+                }
+            }
+        });
     }
 
     // --- DATE FILTER LOGIC ---
