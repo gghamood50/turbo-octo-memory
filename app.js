@@ -1659,7 +1659,7 @@ if(saveInvoiceBtn) {
     if(adminNavSettingsBtn) adminNavSettingsBtn.addEventListener('click', showSettingsScreen);
 
     // Invoice List Screen Handlers
-    if(showAllInvoicesBtn) showAllInvoicesBtn.addEventListener('click', () => showInvoiceListScreen());
+    // if(showAllInvoicesBtn) showAllInvoicesBtn.addEventListener('click', () => showInvoiceListScreen()); // This was causing the redirect to the Jobs tab. The correct listener is defined earlier.
     if(backToWorkerSelectBtn) backToWorkerSelectBtn.addEventListener('click', () => showAdminInvoiceWorkerSelectScreen());
 
 
@@ -2009,7 +2009,7 @@ if(saveInvoiceBtn) {
     if (technicianInvoicesCloseBtn) {
         technicianInvoicesCloseBtn.addEventListener('click', () => {
             closeOverlay(technicianInvoicesOverlay);
-            openInvoiceTechnicianSelectionOverlay();
+            // openInvoiceTechnicianSelectionOverlay(); // Changed to just close
         });
     }
 
@@ -2018,7 +2018,7 @@ if(saveInvoiceBtn) {
     if (allInvoicesListCloseBtn) {
         allInvoicesListCloseBtn.addEventListener('click', () => {
             closeOverlay(allInvoicesListOverlay);
-            openInvoiceTechnicianSelectionOverlay();
+            // openInvoiceTechnicianSelectionOverlay(); // Changed to just close
         });
     }
 
