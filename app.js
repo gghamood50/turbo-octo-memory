@@ -12,6 +12,7 @@ const firebaseConfig = {
 const GENERATE_TRIP_SHEETS_URL = 'https://generate-trip-sheets-216681158749.us-central1.run.app';
 const ASK_DANIEL_URL = 'https://ask-daniel-216681158749.us-central1.run.app';
 const SEND_SCHEDULING_LINKS_URL = 'https://send-manual-scheduling-links-216681158749.us-central1.run.app';
+const SEND_HOMEGUARD_CLAIM_URL = 'https://send-homeguard-claim-216681158749.us-central1.run.app';
 
 // --- Global State ---
 let allJobsData = [];
@@ -2291,30 +2292,42 @@ if(saveInvoiceBtn) {
                     return;
                 }
 
+                const warranty = allWarrantiesData.find(w => w.id === warrantyId);
+                const invoice = warranty?.invoices.find(inv => inv.invoiceNumber === invoiceNumber);
+
+                if (!invoice || !invoice.url) {
+                    alert('Could not find the invoice details or its PDF URL. Please try again.');
+                    return;
+                }
+
                 if (confirm(`This will submit invoice #${invoiceNumber} for processing to ${claimsEmail}. Proceed?`)) {
                     processBtn.textContent = 'Processing...';
                     processBtn.disabled = true;
 
-                    const warrantyToUpdate = allWarrantiesData.find(w => w.id === warrantyId);
-                    if (warrantyToUpdate && warrantyToUpdate.invoices) {
-                        const invoiceIndex = warrantyToUpdate.invoices.findIndex(inv => inv.invoiceNumber === invoiceNumber);
-                        if (invoiceIndex !== -1) {
-                            // FIX: Set status to 'processing' and add the email
-                            warrantyToUpdate.invoices[invoiceIndex].status = 'processing';
-                            warrantyToUpdate.invoices[invoiceIndex].claimsEmail = claimsEmail;
-                            
-                            const warrantyRef = db.collection('warranties').doc(warrantyId);
-                            try {
-                                await warrantyRef.update({ invoices: warrantyToUpdate.invoices });
-                                // The front-end's job is now done. The backend will handle the rest.
-                            } catch (error) {
-                                console.error("Failed to update invoice status:", error);
-                                alert("Failed to start the claim process. Please try again.");
-                                // Re-enable the button if the update fails
-                                processBtn.textContent = 'Process Claim';
-                                processBtn.disabled = false;
-                            }
+                    try {
+                        const response = await fetch(SEND_HOMEGUARD_CLAIM_URL, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                warrantyId: warrantyId,
+                                invoiceNumber: invoiceNumber,
+                                claimsEmail: claimsEmail,
+                                pdfUrl: invoice.url
+                            })
+                        });
+
+                        const result = await response.json();
+                        if (!response.ok) {
+                            throw new Error(result.message || 'An unknown error occurred.');
                         }
+                        
+                        showMessage(`Invoice #${invoiceNumber} sent successfully!`, 'success');
+                        // The backend now handles updating the status, so the frontend will update on the next Firestore snapshot.
+                    } catch (error) {
+                        console.error("Failed to send claim:", error);
+                        alert(`Failed to send claim: ${error.message}`);
+                        processBtn.textContent = 'Process Claim';
+                        processBtn.disabled = false;
                     }
                 }
             }
@@ -2324,53 +2337,69 @@ if(saveInvoiceBtn) {
     const processAllBtn = document.getElementById('processAllBtn');
     if (processAllBtn) {
         processAllBtn.addEventListener('click', async () => {
-            const processAllBtn = document.getElementById('processAllBtn');
             const claimsEmail = document.getElementById('claimsEmailInput').value;
 
             if (!claimsEmail || !claimsEmail.includes('@')) {
                 alert('Please enter a valid email address for claims submission.');
                 return;
             }
-            
-            const providerKey = currentProvider.toLowerCase();
-            const unclaimedWarranties = allWarrantiesData
-                .filter(w => {
-                    const pName = w.job?.warrantyProvider?.toLowerCase() || 'other';
-                    if (providerKey === 'first american') return pName.includes('first american');
-                    if (providerKey === 'home guard') return pName.includes('home guard');
-                    if (providerKey === 'others') return !pName.includes('first american') && !pName.includes('home guard');
-                    return false;
-                })
-                .filter(w => w.invoices?.some(inv => inv.status !== 'paid'));
-            
-            const unclaimedCount = unclaimedWarranties.reduce((sum, w) => sum + w.invoices.filter(i => i.status !== 'paid').length, 0);
 
-            if (unclaimedCount === 0) {
-                alert('No unclaimed invoices to process.');
+            const providerKey = currentProvider.toLowerCase();
+            if (providerKey !== 'home guard') {
+                alert('This bulk processing functionality is only for Home Guard warranties.');
                 return;
             }
 
-            if (confirm(`This will process ${unclaimedCount} unclaimed invoices for ${currentProvider}. Proceed?`)) {
+            const invoicesToSend = [];
+            allWarrantiesData.forEach(warranty => {
+                if (warranty.job?.warrantyProvider?.toLowerCase().includes('home guard')) {
+                    warranty.invoices.forEach(invoice => {
+                        if (invoice.status !== 'paid' && invoice.status !== 'claimed' && invoice.url) {
+                            invoicesToSend.push({
+                                warrantyId: warranty.id,
+                                invoiceNumber: invoice.invoiceNumber,
+                                claimsEmail: claimsEmail,
+                                pdfUrl: invoice.url
+                            });
+                        }
+                    });
+                }
+            });
+
+            if (invoicesToSend.length === 0) {
+                alert('No unclaimed Home Guard invoices with PDFs were found to process.');
+                return;
+            }
+
+            if (confirm(`This will process ${invoicesToSend.length} unclaimed invoices for ${currentProvider} and send them to ${claimsEmail}. Proceed?`)) {
                 processAllBtn.textContent = 'Processing...';
                 processAllBtn.disabled = true;
 
-                const batch = db.batch();
-                unclaimedWarranties.forEach(warrantyDoc => {
-                    const updatedInvoices = warrantyDoc.invoices.map(inv => inv.status !== 'paid' ? { ...inv, status: 'paid' } : inv);
-                    const warrantyRef = db.collection('warranties').doc(warrantyDoc.id);
-                    batch.update(warrantyRef, { invoices: updatedInvoices });
-                });
+                let successCount = 0;
+                let failCount = 0;
 
-                try {
-                    await batch.commit();
-                    console.log(`Successfully processed ${unclaimedCount} invoices.`);
-                } catch (error) {
-                    console.error("Error processing all claims:", error);
-                    alert("An error occurred while processing claims. Please try again.");
-                } finally {
-                    processAllBtn.textContent = 'Process All';
-                    processAllBtn.disabled = false;
+                for (const invoice of invoicesToSend) {
+                    try {
+                        const response = await fetch(SEND_HOMEGUARD_CLAIM_URL, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(invoice)
+                        });
+                        if (!response.ok) {
+                            failCount++;
+                            console.error(`Failed to send invoice ${invoice.invoiceNumber}:`, await response.text());
+                        } else {
+                            successCount++;
+                        }
+                    } catch (error) {
+                        failCount++;
+                        console.error(`Failed to send invoice ${invoice.invoiceNumber}:`, error);
+                    }
                 }
+
+                showMessage(`Processing complete. Sent: ${successCount}, Failed: ${failCount}.`, 'success');
+                processAllBtn.textContent = 'Process All';
+                processAllBtn.disabled = false;
             }
         });
     }
