@@ -509,6 +509,23 @@ function renderInventory(items) {
 
 function formatCurrency(amount) { return `$${parseFloat(amount || 0).toFixed(2)}`; }
 
+function renderInvoiceStats(invoices) {
+    const statsTotalInvoices = document.getElementById('statsTotalInvoices');
+    const statsUnclaimedInvoices = document.getElementById('statsUnclaimedInvoices');
+    const statsClaimedInvoices = document.getElementById('statsClaimedInvoices');
+    const statsClaimedValue = document.getElementById('statsClaimedValue');
+
+    let totalCount = invoices.length;
+    let unclaimedCount = invoices.filter(inv => inv.status !== 'paid').length;
+    let claimedCount = invoices.filter(inv => inv.status === 'paid').length;
+    let claimedValue = invoices.filter(inv => inv.status === 'paid').reduce((sum, inv) => sum + (inv.total || 0), 0);
+    
+    if (statsTotalInvoices) statsTotalInvoices.textContent = totalCount;
+    if (statsUnclaimedInvoices) statsUnclaimedInvoices.textContent = unclaimedCount;
+    if (statsClaimedInvoices) statsClaimedInvoices.textContent = claimedCount;
+    if (statsClaimedValue) statsClaimedValue.textContent = formatCurrency(claimedValue);
+}
+
 function updateDashboard(data) {
     currentFilteredData = data; // Store current filtered data
     renderInvoiceStats(data);
@@ -546,22 +563,30 @@ function renderInvoiceDashboard(invoices) {
     if (statsTotalValue) statsTotalValue.textContent = formatCurrency(totalValue);
 }
 
-function renderProviderCardCounts(warranties) {
+function renderProviderCardCounts(invoices) {
     const providers = { firstAmerican: { count: 0, value: 0 }, homeGuard: { count: 0, value: 0 }, others: { count: 0, value: 0 } };
-    warranties.forEach(w => {
-        const pName = w.job?.warrantyProvider?.toLowerCase() || 'other';
-        const total = w.invoices?.reduce((s, i) => s + (i.total || 0), 0) || 0;
-        const count = w.invoices?.length || 0;
-        if (pName.includes('first american')) { providers.firstAmerican.count += count; providers.firstAmerican.value += total; }
-        else if (pName.includes('home guard')) { providers.homeGuard.count += count; providers.homeGuard.value += total; }
-        else { providers.others.count += count; providers.others.value += total; }
+    invoices.forEach(inv => {
+        const pName = inv.warrantyName?.toLowerCase() || 'other';
+        const total = inv.total || 0;
+        if (pName.includes('first american')) { 
+            providers.firstAmerican.count++; 
+            providers.firstAmerican.value += total; 
+        }
+        else if (pName.includes('home guard')) { 
+            providers.homeGuard.count++; 
+            providers.homeGuard.value += total; 
+        }
+        else { 
+            providers.others.count++; 
+            providers.others.value += total; 
+        }
     });
     document.getElementById('firstAmericanStats').innerHTML = `${providers.firstAmerican.count} <span class="provider-card-subtext">${formatCurrency(providers.firstAmerican.value)}</span>`;
     document.getElementById('homeGuardStats').innerHTML = `${providers.homeGuard.count} <span class="provider-card-subtext">${formatCurrency(providers.homeGuard.value)}</span>`;
     document.getElementById('othersStats').innerHTML = `${providers.others.count} <span class="provider-card-subtext">${formatCurrency(providers.others.value)}</span>`;
 }
 
-function openProviderClaimsWorkspace(providerName, warranties) {
+function openProviderClaimsWorkspace(providerName, invoices) { // Changed parameter name
     currentProvider = providerName;
     const modalTitle = document.getElementById('providerModalTitle');
     const unclaimedList = document.getElementById('unclaimedInvoicesList');
@@ -575,8 +600,10 @@ function openProviderClaimsWorkspace(providerName, warranties) {
     claimedList.innerHTML = '';
     
     const providerKey = providerName.toLowerCase();
-    const filteredWarranties = warranties.filter(w => {
-        const pName = w.job?.warrantyProvider?.toLowerCase() || 'other';
+
+    // Filter the flat invoice list directly
+    const filteredInvoices = invoices.filter(inv => {
+        const pName = inv.warrantyName?.toLowerCase() || 'other';
         if (providerKey === 'first american') return pName.includes('first american');
         if (providerKey === 'home guard') return pName.includes('home guard');
         if (providerKey === 'others') return !pName.includes('first american') && !pName.includes('home guard');
@@ -586,17 +613,24 @@ function openProviderClaimsWorkspace(providerName, warranties) {
     let unclaimedCount = 0;
     let claimedCount = 0;
 
-    filteredWarranties.forEach(w => {
-        w.invoices?.forEach(inv => {
-            const card = document.createElement('div');
-            card.className = 'invoice-card';
-            card.dataset.invoiceNumber = inv.invoiceNumber;
-            card.dataset.warrantyId = w.id;
-            const isClaimed = inv.status === 'paid';
-            card.innerHTML = `<div class="flex justify-between items-start"><div><p class="font-semibold text-slate-800">${w.job?.customer || 'N/A'}</p><p class="text-xs text-slate-500">#${inv.invoiceNumber || 'N/A'} &bull; ${inv.invoiceDate || 'N/A'}</p></div><p class="font-bold text-lg text-green-600">${formatCurrency(inv.total)}</p></div><div class="mt-3 flex justify-end items-center gap-2"><button class="btn-secondary-stitch text-xs view-warranty-btn" data-id="${w.id}">View Job</button>${!isClaimed ? `<button class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-1 px-3 rounded-md process-claim-btn">Process Claim</button>` : ''}</div>`;
-            if(isClaimed) { card.classList.add('claimed'); claimedList.appendChild(card); claimedCount++; } 
-            else { unclaimedList.appendChild(card); unclaimedCount++; }
-        });
+    // Iterate over the filtered invoices
+    filteredInvoices.forEach(inv => {
+        const card = document.createElement('div');
+        card.className = 'invoice-card';
+        card.dataset.invoiceNumber = inv.invoiceNumber;
+        card.dataset.invoiceId = inv.id; // Use invoice ID
+        const isClaimed = inv.status === 'paid';
+
+        card.innerHTML = `<div class="flex justify-between items-start"><div><p class="font-semibold text-slate-800">${inv.customerName || 'N/A'}</p><p class="text-xs text-slate-500">#${inv.invoiceNumber || 'N/A'} &bull; ${inv.createdAt?.toDate().toLocaleDateString() || 'N/A'}</p></div><p class="font-bold text-lg text-green-600">${formatCurrency(inv.total)}</p></div><div class="mt-3 flex justify-end items-center gap-2"><button class="btn-secondary-stitch text-xs view-invoice-btn" data-id="${inv.id}">View Invoice</button>${!isClaimed ? `<button class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-1 px-3 rounded-md process-claim-btn">Process Claim</button>` : ''}</div>`;
+
+        if(isClaimed) { 
+            card.classList.add('claimed'); 
+            claimedList.appendChild(card); 
+            claimedCount++; 
+        } else { 
+            unclaimedList.appendChild(card); 
+            unclaimedCount++; 
+        }
     });
 
     if (unclaimedCount === 0) { unclaimedList.innerHTML = '<p class="text-center text-sm text-slate-500 p-4">No unclaimed invoices.</p>'; processAllBtn.classList.add('hidden'); } 
@@ -803,7 +837,7 @@ function closeModal(modal) { if (modal) modal.style.display = 'none'; }
 function closeOverlay(overlay) { if(overlay) overlay.classList.remove('is-visible'); }
 
 function listenForWarranties() {
-    const warrantiesQuery = firebase.firestore().collection("warranties").orderBy("completionDate", "desc");
+    const warrantiesQuery = firebase.firestore().collection("invoices").where("invoiceType", "in", ["warranty", "Warranty", "WARRANTY"]);
     warrantiesQuery.onSnapshot((snapshot) => {
         allWarrantiesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         updateDashboard(allWarrantiesData);
@@ -823,38 +857,38 @@ function listenForAllInvoices() {
     });
 }
 
-function renderWarranties(warranties) {
+function renderWarranties(invoices) {
     const warrantyTableBody = document.getElementById('warrantyTableBody');
     if (!warrantyTableBody) return;
 
     warrantyTableBody.innerHTML = '';
 
-    if (warranties.length === 0) {
-        warrantyTableBody.innerHTML = `<tr><td colspan="5" class="text-center text-slate-500 py-4">No warranties found.</td></tr>`;
+    if (invoices.length === 0) {
+        warrantyTableBody.innerHTML = `<tr><td colspan="5" class="text-center text-slate-500 py-4">No warranty invoices found.</td></tr>`;
         return;
     }
     
     const viewAllBtn = document.getElementById('viewAllInvoicesBtn');
 
-    const sortedWarranties = [...warranties].sort((a, b) => (b.completionDate?.toDate() || 0) - (a.completionDate?.toDate() || 0));
-    const warrantiesToRender = sortedWarranties.slice(0, 5);
+    const sortedInvoices = [...invoices].sort((a, b) => (b.createdAt?.toDate() || 0) - (a.createdAt?.toDate() || 0));
+    const invoicesToRender = sortedInvoices.slice(0, 5);
     
     if (viewAllBtn) {
         viewAllBtn.style.display = 'inline';
     }
 
-    warrantyTableBody.innerHTML = warrantiesToRender.map(warranty => {
-        const completionDate = warranty.completionDate && typeof warranty.completionDate.toDate === 'function' 
-            ? warranty.completionDate.toDate().toLocaleDateString() 
+    warrantyTableBody.innerHTML = invoicesToRender.map(invoice => {
+        const completionDate = invoice.createdAt && typeof invoice.createdAt.toDate === 'function' 
+            ? invoice.createdAt.toDate().toLocaleDateString() 
             : 'N/A';
             
         return `
             <tr>
-                <td class="font-medium text-slate-800">${warranty.job.customer || 'N/A'}</td>
-                <td>${warranty.job.address || 'N/A'}</td>
+                <td class="font-medium text-slate-800">${invoice.customerName || 'N/A'}</td>
+                <td>${invoice.customerAddress || 'N/A'}</td>
                 <td>${completionDate}</td>
-                <td>${warranty.job.assignedTechnicianName || 'N/A'}</td>
-                <td><button class="btn-secondary-stitch view-warranty-btn" data-id="${warranty.id}">View Details</button></td>
+                <td>${invoice.workerName || 'N/A'}</td>
+                <td><button class="btn-secondary-stitch view-invoice-btn" data-id="${invoice.id}">View Details</button></td>
             </tr>
         `;
     }).join('');
