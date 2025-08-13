@@ -517,9 +517,9 @@ function renderInvoiceStats(invoices) {
     const statsClaimedValue = document.getElementById('statsClaimedValue');
 
     let totalCount = invoices.length;
-    let unclaimedCount = invoices.filter(inv => inv.status !== 'paid').length;
-    let claimedCount = invoices.filter(inv => inv.status === 'paid').length;
-    let claimedValue = invoices.filter(inv => inv.status === 'paid').reduce((sum, inv) => sum + (inv.total || 0), 0);
+    let unclaimedCount = invoices.filter(inv => inv.status !== 'paid' && inv.status !== 'Claimed').length;
+    let claimedCount = invoices.filter(inv => inv.status === 'paid' || inv.status === 'Claimed').length;
+    let claimedValue = invoices.filter(inv => inv.status === 'paid' || inv.status === 'Claimed').reduce((sum, inv) => sum + (inv.total || 0), 0);
     
     if (statsTotalInvoices) statsTotalInvoices.textContent = totalCount;
     if (statsUnclaimedInvoices) statsUnclaimedInvoices.textContent = unclaimedCount;
@@ -620,7 +620,7 @@ function openProviderClaimsWorkspace(providerName, invoices) { // Changed parame
         card.className = 'invoice-card';
         card.dataset.invoiceNumber = inv.invoiceNumber;
         card.dataset.invoiceId = inv.id; // Use invoice ID
-        const isClaimed = inv.status === 'paid';
+        const isClaimed = inv.status === 'paid' || inv.status === 'Claimed';
 
         card.innerHTML = `<div class="flex justify-between items-start"><div><p class="font-semibold text-slate-800">${inv.customerName || 'N/A'}</p><p class="text-xs text-slate-500">#${inv.invoiceNumber || 'N/A'} &bull; ${inv.createdAt?.toDate().toLocaleDateString() || 'N/A'}</p></div><p class="font-bold text-lg text-green-600">${formatCurrency(inv.total)}</p></div><div class="mt-3 flex justify-end items-center gap-2"><button class="btn-secondary-stitch text-xs view-invoice-btn" data-id="${inv.id}">View Invoice</button>${!isClaimed ? `<button class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-1 px-3 rounded-md process-claim-btn">Process Claim</button>` : ''}</div>`;
 
@@ -2241,7 +2241,7 @@ if(saveInvoiceBtn) {
                 startDate.setDate(endDate.getDate() - days);
                 
                 const filteredData = allWarrantiesData.filter(w => {
-                    const completionDate = w.completionDate?.toDate();
+                    const completionDate = w.createdAt?.toDate();
                     return completionDate && completionDate >= startDate && completionDate <= endDate;
                 });
                 updateDashboard(filteredData);
@@ -2269,7 +2269,7 @@ if(saveInvoiceBtn) {
             endDate.setHours(23, 59, 59, 999);
 
             const filteredData = allWarrantiesData.filter(w => {
-                const completionDate = w.completionDate?.toDate();
+                const completionDate = w.createdAt?.toDate();
                 return completionDate && completionDate >= startDate && completionDate <= endDate;
             });
             updateDashboard(filteredData);
@@ -2283,24 +2283,23 @@ if(saveInvoiceBtn) {
             const processBtn = event.target.closest('.process-claim-btn');
             if (processBtn) {
                 const card = processBtn.closest('.invoice-card');
-                const warrantyId = card.dataset.warrantyId;
-                const invoiceNumber = card.dataset.invoiceNumber;
+                const invoiceId = card.dataset.invoiceId; // CORRECT: Use invoiceId from the dataset
                 const claimsEmail = document.getElementById('claimsEmailInput').value;
 
                 if (!claimsEmail || !claimsEmail.includes('@')) {
                     alert('Please enter a valid email address for claims submission.');
                     return;
                 }
-
-                const warranty = allWarrantiesData.find(w => w.id === warrantyId);
-                const invoice = warranty?.invoices.find(inv => inv.invoiceNumber === invoiceNumber);
+                
+                // CORRECT: Find the invoice directly in the flat allWarrantiesData (which holds all warranty invoices)
+                const invoice = allWarrantiesData.find(inv => inv.id === invoiceId);
 
                 if (!invoice || !invoice.url) {
                     alert('Could not find the invoice details or its PDF URL. Please try again.');
                     return;
                 }
 
-                if (confirm(`This will submit invoice #${invoiceNumber} for processing to ${claimsEmail}. Proceed?`)) {
+                if (confirm(`This will submit invoice #${invoice.invoiceNumber} for processing to ${claimsEmail}. Proceed?`)) {
                     processBtn.textContent = 'Processing...';
                     processBtn.disabled = true;
 
@@ -2309,8 +2308,8 @@ if(saveInvoiceBtn) {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
-                                warrantyId: warrantyId,
-                                invoiceNumber: invoiceNumber,
+                                warrantyId: invoice.id, // CORRECT: Pass the invoice's own ID as warrantyId
+                                invoiceNumber: invoice.invoiceNumber,
                                 claimsEmail: claimsEmail,
                                 pdfUrl: invoice.url
                             })
@@ -2321,7 +2320,7 @@ if(saveInvoiceBtn) {
                             throw new Error(result.message || 'An unknown error occurred.');
                         }
                         
-                        showMessage(`Invoice #${invoiceNumber} sent successfully!`, 'success');
+                        showMessage(`Invoice #${invoice.invoiceNumber} sent successfully!`, 'success');
                         // The backend now handles updating the status, so the frontend will update on the next Firestore snapshot.
                     } catch (error) {
                         console.error("Failed to send claim:", error);
@@ -2354,7 +2353,7 @@ if(saveInvoiceBtn) {
             allWarrantiesData.forEach(warranty => {
                 if (warranty.job?.warrantyProvider?.toLowerCase().includes('home guard')) {
                     warranty.invoices.forEach(invoice => {
-                        if (invoice.status !== 'paid' && invoice.status !== 'claimed' && invoice.url) {
+                        if (invoice.status !== 'paid' && invoice.status !== 'Claimed' && invoice.url) {
                             invoicesToSend.push({
                                 warrantyId: warranty.id,
                                 invoiceNumber: invoice.invoiceNumber,
