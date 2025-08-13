@@ -211,6 +211,106 @@ function renderJobs(jobs) {
     }).join('');
 }
 
+function openInvoiceViewModal(invoiceId) {
+    const invoice = allInvoicesData.find(inv => inv.id === invoiceId);
+    currentlyViewedInvoiceData = invoice;
+
+    if (!invoice) {
+        showMessage('Could not find invoice details.', 'error');
+        return;
+    }
+
+    const invoiceModalBody = document.getElementById('invoiceModalBody');
+    const modalTitle = document.getElementById('modalInvoiceTitle');
+    const modalMarkPaidBtn = document.getElementById('modalMarkPaidBtn');
+
+    modalTitle.textContent = `Invoice #${invoice.invoiceNumber || 'N/A'}`;
+
+    let itemsHtml = invoice.items.map(item => `
+        <tr>
+            <td>${item.description}</td>
+            <td class="text-right">${item.quantity}</td>
+            <td class="text-right">${formatCurrency(item.price)}</td>
+            <td class="text-right">${formatCurrency(item.total)}</td>
+        </tr>
+    `).join('');
+
+    const signatureHtml = invoice.signatureDataURL
+        ? `<img src="${invoice.signatureDataURL}" alt="Customer Signature" class="mx-auto my-2" style="max-width: 200px; border: 1px solid #ccc;"/>`
+        : '<p>No signature on file.</p>';
+
+    invoiceModalBody.innerHTML = `
+        <div class="grid grid-cols-2 gap-4 text-sm">
+            <div><strong>Customer:</strong> ${invoice.customerName}</div>
+            <div><strong>Date:</strong> ${invoice.createdAt?.toDate().toLocaleDateString() || 'N/A'}</div>
+            <div><strong>Address:</strong> ${invoice.customerAddress || 'N/A'}</div>
+            <div><strong>Phone:</strong> ${invoice.customerPhone || 'N/A'}</div>
+            <div><strong>Type:</strong> <span class="status-pill ${invoice.invoiceType.toLowerCase() === 'warranty' ? 'status-awaiting-completion' : 'status-link-sent'}">${invoice.invoiceType || 'N/A'}</span></div>
+            <div><strong>Status:</strong> <span class="status-pill ${invoice.status === 'paid' ? 'status-completed' : 'status-needs-scheduling'}">${invoice.status || 'N/A'}</span></div>
+        </div>
+        <hr class="my-4">
+        <h4 class="font-semibold mb-2">Items</h4>
+        <table class="custom-table w-full text-sm">
+            <thead>
+                <tr>
+                    <th>Description</th>
+                    <th class="text-right">Qty</th>
+                    <th class="text-right">Price</th>
+                    <th class="text-right">Total</th>
+                </tr>
+            </thead>
+            <tbody>${itemsHtml}</tbody>
+        </table>
+        <div class="flex justify-end mt-4">
+            <div class="w-1/2 space-y-2 text-sm">
+                <div class="flex justify-between"><span>Subtotal:</span> <span>${formatCurrency(invoice.subtotal)}</span></div>
+                <div class="flex justify-between"><span>Tax:</span> <span>${formatCurrency(invoice.salesTaxAmount)}</span></div>
+                <div class="flex justify-between font-bold text-base border-t pt-2"><span>Total:</span> <span>${formatCurrency(invoice.total)}</span></div>
+            </div>
+        </div>
+        <div class="text-center mt-4">
+            <button id="viewMoreBtn" class="text-sm text-green-600 hover:underline">View More</button>
+        </div>
+        <div id="invoiceModalMoreDetails" style="display: none;" class="mt-4 text-sm space-y-2">
+            <hr class="my-4">
+            <h4 class="font-semibold mb-2">Additional Details</h4>
+            <div><strong>Dispatch #:</strong> ${invoice.poNumber || 'N/A'}</div>
+            <div><strong>Warranty Provider:</strong> ${invoice.warrantyName || 'N/A'}</div>
+            <div><strong>Plan Type:</strong> ${invoice.planType || 'N/A'}</div>
+            <div><strong>Technician:</strong> ${invoice.workerName || 'N/A'}</div>
+            <div><strong>Type of Equipment:</strong> ${invoice.typeOfEquipment || 'N/A'}</div>
+            <div class="mt-2">
+                <strong class="block">Job Description:</strong>
+                <p class="whitespace-pre-wrap p-2 bg-slate-50 rounded">${invoice.jobDescription || 'N/A'}</p>
+            </div>
+            <div class="mt-2">
+                <strong class="block">Recommendations:</strong>
+                <p class="whitespace-pre-wrap p-2 bg-slate-50 rounded">${invoice.recommendations || 'N/A'}</p>
+            </div>
+            <div class="mt-2">
+                <strong class="block">Customer Signature:</strong>
+                <div class="p-2 bg-slate-50 rounded text-center">
+                    ${signatureHtml}
+                </div>
+            </div>
+        </div>
+    `;
+
+    modalMarkPaidBtn.textContent = invoice.status === 'paid' ? 'Mark as Unpaid' : 'Mark as Paid';
+    invoiceViewModal.style.display = 'block';
+
+    const viewMoreBtn = document.getElementById('viewMoreBtn');
+    const moreDetails = document.getElementById('invoiceModalMoreDetails');
+
+    if (viewMoreBtn && moreDetails) {
+        viewMoreBtn.addEventListener('click', () => {
+            const isHidden = moreDetails.style.display === 'none';
+            moreDetails.style.display = isHidden ? 'block' : 'none';
+            viewMoreBtn.textContent = isHidden ? 'View Less' : 'View More';
+        });
+    }
+}
+
 function filterInvoices() {
     const searchInput = invoiceSearchInput.value.toLowerCase();
     const searchTerms = searchInput.split(',').map(term => term.trim()).filter(term => term);
@@ -1623,23 +1723,50 @@ if(saveInvoiceBtn) {
     });
     
     if(modalDownloadPdfBtn) modalDownloadPdfBtn.addEventListener('click', async function() {
-        if (currentlyViewedInvoiceData && currentlyViewedInvoiceData.pdfDataURL) {
-            await triggerPdfDownload(currentlyViewedInvoiceData.pdfDataURL, `Safeway-Invoice-${currentlyViewedInvoiceData.invoiceNumber || 'draft'}.pdf`);
-        } else if (currentlyViewedInvoiceData) {
-            const pdfData = generatePDF(currentlyViewedInvoiceData);
-            if (pdfData) {
-                currentlyViewedInvoiceData.pdfDataURL = pdfData;
-                if (await saveInvoiceData(currentlyViewedInvoiceData, true, currentlyViewedInvoiceData.id)) { 
-                     await triggerPdfDownload(pdfData, `Safeway-Invoice-${currentlyViewedInvoiceData.invoiceNumber || 'draft'}.pdf`);
-                     allAdminInvoicesCache = [];
-                } else {
-                    showMessage('Failed to update invoice with new PDF before download.', 'error');
+        if (!currentlyViewedInvoiceData) {
+            showMessage('No invoice data to preview.', 'error');
+            return;
+        }
+
+        // Always generate a fresh PDF to ensure it's up-to-date
+        const pdfData = generatePDF(currentlyViewedInvoiceData, false); // isPreview = false for final look
+
+        if (pdfData) {
+            const pdfPreviewModal = document.getElementById('pdfPreviewModal');
+            const pdfPreviewFrame = document.getElementById('pdfPreviewFrame');
+            const closePdfPreviewBtn = document.getElementById('closePdfPreview');
+
+            if (pdfPreviewModal && pdfPreviewFrame && closePdfPreviewBtn) {
+                try {
+                    const response = await fetch(pdfData);
+                    const blob = await response.blob();
+                    const objectUrl = URL.createObjectURL(blob);
+                    
+                    pdfPreviewFrame.src = objectUrl;
+
+                    const closePreview = () => {
+                        URL.revokeObjectURL(objectUrl);
+                        pdfPreviewModal.classList.add('hidden');
+                        pdfPreviewModal.classList.remove('flex');
+                        pdfPreviewFrame.src = 'about:blank';
+                    };
+
+                    closePdfPreviewBtn.onclick = closePreview;
+                    pdfPreviewModal.onclick = (e) => {
+                        if (e.target === pdfPreviewModal) {
+                            closePreview();
+                        }
+                    };
+
+                    pdfPreviewModal.classList.remove('hidden');
+                    pdfPreviewModal.classList.add('flex');
+                } catch (error) {
+                    console.error("Error creating PDF preview:", error);
+                    showMessage('Could not generate PDF preview.', 'error');
                 }
-            } else {
-                showMessage('Failed to generate PDF for download.', 'error');
             }
         } else {
-            showMessage('No invoice data to download PDF.', 'error');
+            showMessage('Failed to generate PDF for preview.', 'error');
         }
     });
     if(modalWorkerCloseBtn) modalWorkerCloseBtn.addEventListener('click', closeWorkerDetailModal);
@@ -1918,6 +2045,10 @@ if(saveInvoiceBtn) {
             const warrantyId = event.target.dataset.id;
             const warrantyData = allWarrantiesData.find(w => w.id === warrantyId);
             if(warrantyData) openWarrantyDetailModal(warrantyData);
+        }
+        if (event.target.classList.contains('view-invoice-btn')) {
+            const invoiceId = event.target.dataset.id;
+            openInvoiceViewModal(invoiceId);
         }
     });
 
