@@ -1,9 +1,9 @@
-// backend/index.js
-
 const express = require("express");
 const cors = require("cors");
 const admin = require("firebase-admin");
 const crypto = require("crypto");
+const sgMail = require('@sendgrid/mail');
+const { SecretManagerServiceClient } = require('@google-cloud/secret-manager');
 
 /**
  * ---------------------------------------------------------------------------
@@ -15,35 +15,81 @@ if (!admin.apps.length) {
 }
 
 const firestore = admin.firestore();
+const secretManagerClient = new SecretManagerServiceClient();
 
-// Bucket config: default to your requested bucket name.
-// NOTE: Use the bucket NAME only (no "gs://", no trailing paths).
-const storageBucket =
-  process.env.FIREBASE_STORAGE_BUCKET || "safewayos2.firebasestorage.app";
+// Bucket config
+const storageBucket = process.env.FIREBASE_STORAGE_BUCKET || "safewayos2.firebasestorage.app";
 const bucket = admin.storage().bucket(storageBucket);
 
 const app = express();
 app.use(cors({ origin: true }));
-app.use(express.json({ limit: "25mb" })); // large enough for 2 base64 PDFs
-
-/**
- * ---------------------------------------------------------------------------
- * HEALTH CHECK (prevents Cloud Run "didn't listen on PORT" errors)
- * ---------------------------------------------------------------------------
- */
-app.get("/", (_req, res) => {
-  res.status(200).send({
-    ok: true,
-    service: "warranty-invoice-uploader",
-    bucket: bucket.name,
-  });
-});
+app.use(express.json({ limit: "25mb" }));
 
 /**
  * ---------------------------------------------------------------------------
  * HELPERS
  * ---------------------------------------------------------------------------
  */
+
+// --- Email Sending Logic (Merged from send-invoices-to-customer) ---
+let sendGridApiKey = null;
+const getSendGridApiKey = async () => {
+    if (sendGridApiKey) return sendGridApiKey;
+    
+    const name = 'projects/216681158749/secrets/sendgrid-api-key/versions/latest';
+    try {
+        const [version] = await secretManagerClient.accessSecretVersion({ name });
+        sendGridApiKey = version.payload.data.toString('utf8');
+        sgMail.setApiKey(sendGridApiKey);
+        return sendGridApiKey;
+    } catch (error) {
+        console.error("FATAL: Could not retrieve SendGrid API Key.", error);
+        throw new Error("API Key configuration error.");
+    }
+};
+
+async function sendCustomerEmailWithAttachment(invoiceData) {
+    if (!invoiceData || invoiceData.invoiceType !== 'customer' || !invoiceData.base64Pdf) {
+        console.log(`Skipping email for invoice #${invoiceData.invoiceNumber} (Type: ${invoiceData.invoiceType}).`);
+        return;
+    }
+
+    if (!invoiceData.customerEmail) {
+        console.warn(`Cannot send email for invoice #${invoiceData.invoiceNumber}: Customer email is missing.`);
+        return;
+    }
+
+    console.log(`Preparing email for invoice #${invoiceData.invoiceNumber} to ${invoiceData.customerEmail}`);
+    await getSendGridApiKey(); // Ensure API key is loaded
+
+    const msg = {
+        to: invoiceData.customerEmail,
+        from: {
+            email: 'safewayoperationsystem@gmail.com', // Your verified SendGrid sender
+            name: 'Safeway Garage Solutions'
+        },
+        subject: `Your Invoice from Safeway Garage Solutions (#${invoiceData.invoiceNumber})`,
+        html: `<p>Hello ${invoiceData.customerName},</p><p>Thank you for your business! Please find your invoice attached.</p><p>Sincerely,<br/>The Safeway Garage Solutions Team</p>`,
+        attachments: [{
+            content: invoiceData.base64Pdf.split(',').pop(), // Remove data URI prefix
+            filename: `invoice-${invoiceData.invoiceNumber}.pdf`,
+            type: 'application/pdf',
+            disposition: 'attachment',
+        }],
+    };
+
+    try {
+        await sgMail.send(msg);
+        console.log(`Email sent successfully to ${invoiceData.customerEmail}.`);
+    } catch (error) {
+        console.error(`Failed to send invoice email to ${invoiceData.customerEmail}:`, error.response?.body || error);
+        // We don't throw an error here, because the invoice is already saved.
+        // The failure to email should be logged, but not fail the whole operation.
+    }
+}
+
+
+// --- PDF and Firestore Logic ---
 const ALLOWED_VARIANTS = new Set(["CUSTOMER", "WARRANTY"]);
 
 function decodeBase64Pdf(maybeDataUrl) {
@@ -59,10 +105,8 @@ function buildFileInfo({ jobId, invoiceNumber, variant }) {
 
   if (!safeJob) throw new Error("jobId is required.");
   if (!safeNumber) throw new Error("invoiceNumber is required.");
-  if (!ALLOWED_VARIANTS.has(safeVariant))
-    throw new Error('variant must be "CUSTOMER" or "WARRANTY".');
+  if (!ALLOWED_VARIANTS.has(safeVariant)) throw new Error('variant must be "CUSTOMER" or "WARRANTY".');
 
-  // Save under: gs://safewayos2.firebasestorage.app/invoices/{jobId}/{invoiceNumber}-{variant}.pdf
   const filename = `${safeNumber}-${safeVariant}.pdf`;
   const filePath = `invoices/${safeJob}/${filename}`;
   return { safeJob, safeVariant, safeNumber, filename, filePath };
@@ -81,72 +125,47 @@ async function uploadPdfAndGetUrl(filePath, buffer) {
     },
   });
 
-  // Download URL with token (works with default Firebase Storage rules).
   const encodedPath = encodeURIComponent(filePath);
-  const downloadUrl = `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodedPath}?alt=media&token=${token}`;
-
-  return { url: downloadUrl, token, path: filePath };
+  return `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodedPath}?alt=media&token=${token}`;
 }
 
-
-async function addInvoiceToCollection({
-    jobId,
-    variant,
-    invoiceId,
-    invoiceNumber,
-    url,
-    filePath,
-    filename,
-    invoiceData
-}) {
-    // Merge the provided invoice data with the file metadata
+async function addInvoiceToCollection({ jobId, variant, invoiceNumber, url, filePath, filename, invoiceData }) {
     const docData = {
-        ...invoiceData, // Spread all fields from the form
+        ...invoiceData,
         jobId,
-        invoiceId: invoiceId || null,
         invoiceNumber,
-        invoiceType: variant, // Overwrite invoiceType to ensure it's 'CUSTOMER' or 'WARRANTY'
+        invoiceType: variant,
         url,
         path: filePath,
         filename,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        status: 'Saved', // Set a clear initial status
     };
 
-    // Remove the base64 PDF from the data before saving to Firestore
+    // **THE FIX:** Remove ALL base64-encoded PDF data before saving to Firestore.
     delete docData.base64Pdf;
+    delete docData.pdfDataURL; // This was the missing line causing the error.
 
-    // Add a new document with a generated ID to the "invoices" collection.
     await firestore.collection("invoices").add(docData);
 }
 
-
 /**
  * ---------------------------------------------------------------------------
- * ROUTE: Upload one or two PDFs and write to the 'invoices' collection
+ * MAIN ROUTE
  * ---------------------------------------------------------------------------
- * Accepts either:
- * - { items: [ { jobId, invoiceId, invoiceNumber, variant, base64Pdf }, ... ] }
- * - { jobId, invoiceId, invoiceNumber, variant, base64Pdf } (single)
  */
 app.post("/warranties/upload", async (req, res) => {
   try {
     const items = Array.isArray(req.body?.items) ? req.body.items : [req.body];
-
     if (!items.length) {
       return res.status(400).send({ error: "No items provided." });
     }
 
-    // upfront validation
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i] || {};
-      if (!item.jobId) return res.status(400).send({ error: `Item ${i}: 'jobId' is required.` });
-      if (!item.invoiceNumber) return res.status(400).send({ error: `Item ${i}: 'invoiceNumber' is required.` });
-      const v = String(item.variant || "").toUpperCase();
-      if (!ALLOWED_VARIANTS.has(v)) {
-        return res.status(400).send({ error: `Item ${i}: 'variant' must be 'CUSTOMER' or 'WARRANTY'.` });
+    // Upfront validation
+    for (const item of items) {
+      if (!item.jobId || !item.invoiceNumber || !item.variant || !item.base64Pdf || !item.invoiceData) {
+        return res.status(400).send({ error: "Each item must have jobId, invoiceNumber, variant, base64Pdf, and invoiceData." });
       }
-      if (!item.base64Pdf) return res.status(400).send({ error: `Item ${i}: 'base64Pdf' is required.` });
-      if (!item.invoiceData) return res.status(400).send({ error: `Item ${i}: 'invoiceData' is required.` });
     }
 
     const results = await Promise.all(
@@ -159,32 +178,24 @@ app.post("/warranties/upload", async (req, res) => {
           });
 
           const pdfBuffer = decodeBase64Pdf(item.base64Pdf);
-          const { url, path } = await uploadPdfAndGetUrl(filePath, pdfBuffer);
+          const url = await uploadPdfAndGetUrl(filePath, pdfBuffer);
 
-          // Add a record to the new "invoices" collection
           await addInvoiceToCollection({
             jobId: safeJob,
             variant: safeVariant,
-            invoiceId: item.invoiceId || null,
             invoiceNumber: safeNumber,
             url,
-            filePath: path,
+            filePath,
             filename,
-            invoiceData: item.invoiceData || {}, // Pass the full invoice data object here
+            invoiceData: item.invoiceData || {},
           });
+          
+          // After successfully saving, attempt to send the customer email
+          await sendCustomerEmailWithAttachment(item.invoiceData);
 
-
-          return {
-            ok: true,
-            jobId: safeJob,
-            variant: safeVariant,
-            invoiceId: item.invoiceId || null,
-            invoiceNumber: safeNumber,
-            filename,
-            path,
-            url,
-          };
+          return { ok: true, variant: safeVariant, invoiceNumber: safeNumber, url };
         } catch (e) {
+          console.error(`Error processing item at index ${idx}:`, e);
           return { ok: false, index: idx, error: e?.message || String(e) };
         }
       })
@@ -197,18 +208,10 @@ app.post("/warranties/upload", async (req, res) => {
       return res.status(500).send({ error: "All uploads failed.", results });
     }
 
-    return res.status(200).send({
-      message: "Processed",
-      bucket: bucket.name,
-      succeeded,
-      failed,
-    });
+    return res.status(200).send({ message: "Processed", succeeded, failed });
   } catch (err) {
-    console.error("Upload error:", err);
-    return res.status(500).send({
-      error: "Internal server error.",
-      details: err?.message || String(err),
-    });
+    console.error("Critical Upload Error:", err);
+    return res.status(500).send({ error: "Internal server error.", details: err?.message || String(err) });
   }
 });
 
@@ -219,5 +222,5 @@ app.post("/warranties/upload", async (req, res) => {
  */
 const port = parseInt(process.env.PORT || "8080", 10);
 app.listen(port, () => {
-  console.log(`Warranty Invoice API listening on ${port}. Bucket: ${bucket.name}`);
+  console.log(`Warranty Invoice API (with Email) listening on ${port}.`);
 });
