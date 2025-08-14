@@ -1464,7 +1464,7 @@ if(showAllInvoicesBtn) {
             const ratio = Math.max(window.devicePixelRatio || 1, 1);
             
             signatureCanvas.width = containerWidth * ratio;
-            signatureCanvas.height = 150 * ratio; // Fixed height
+            signatureCanvas.height = container.offsetHeight * ratio;
             signatureCanvas.getContext("2d").scale(ratio, ratio);
 
             signaturePad.clear(); // Reclears the canvas after resizing
@@ -3319,12 +3319,12 @@ function generatePDF(invoiceDataForPdf, isPreview = false) {
 
         if (invoiceDataForPdf.signatureDataURL && invoiceDataForPdf.signatureDataURL !== "placeholder") {
             try {
-                doc.addImage(invoiceDataForPdf.signatureDataURL, 'PNG', margin, finalY + 2, 50, 15);
+                doc.addImage(invoiceDataForPdf.signatureDataURL, 'PNG', margin, finalY + 2, 87.5, 26.25);
             } catch (e) { console.error("Error adding signature image:", e); }
         } else if (invoiceDataForPdf.signatureDataURL === "placeholder") {
             doc.setFont("cursive", "normal");
             doc.setFontSize(20);
-            doc.text("J. Doe", margin + 2, finalY + 12);
+            doc.text("J. Doe", margin + 2, finalY + 15);
         }
         
         doc.setFontSize(7);
@@ -3658,7 +3658,7 @@ function resizeCanvas() {
     if (containerWidth === 0) return;
     const ratio =  Math.max(window.devicePixelRatio || 1, 1);
     signatureCanvas.width = containerWidth * ratio;
-    signatureCanvas.height = 150 * ratio; 
+    signatureCanvas.height = signaturePadContainer.offsetHeight * ratio; 
     const ctx = signatureCanvas.getContext("2d");
     if (ctx) {
         ctx.scale(ratio, ratio);
