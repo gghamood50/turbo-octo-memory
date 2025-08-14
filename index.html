@@ -589,13 +589,25 @@
                             <label for="jobAddress" class="form-label">Job Address (if different)</label>
                             <input type="text" id="jobAddress" name="jobAddress" class="form-input" placeholder="Street, City, State, Zip">
                         </div>
-                        <div class="mt-4">
-                            <label for="typeOfEquipment" class="form-label">Type of Equipment</label>
-                            <textarea id="typeOfEquipment" name="typeOfEquipment" rows="2" class="form-input" placeholder="e.g., Garage Door Opener, Springs"></textarea>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                            <div>
+                                <label for="warrantyTypeOfEquipment" class="form-label">Warranty Type of Equipment</label>
+                                <textarea id="warrantyTypeOfEquipment" name="warrantyTypeOfEquipment" rows="2" class="form-input" placeholder="e.g., Warranty-related equipment"></textarea>
+                            </div>
+                            <div>
+                                <label for="nonCoveredTypeOfEquipment" class="form-label">Non-covered Type of Equipment</label>
+                                <textarea id="nonCoveredTypeOfEquipment" name="nonCoveredTypeOfEquipment" rows="2" class="form-input" placeholder="e.g., Customer-paid equipment"></textarea>
+                            </div>
                         </div>
-                        <div class="mt-4">
-                            <label for="jobDescription" class="form-label">Job Description</label>
-                            <textarea id="jobDescription" name="jobDescription" rows="3" class="form-input" placeholder="Describe the work performed..."></textarea>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                            <div>
+                                <label for="warrantyJobDescription" class="form-label">Warranty Job Description</label>
+                                <textarea id="warrantyJobDescription" name="warrantyJobDescription" rows="3" class="form-input" placeholder="Describe warranty work..."></textarea>
+                            </div>
+                            <div>
+                                <label for="nonCoveredJobDescription" class="form-label">Non-covered Job Description</label>
+                                <textarea id="nonCoveredJobDescription" name="nonCoveredJobDescription" rows="3" class="form-input" placeholder="Describe non-covered work..."></textarea>
+                            </div>
                         </div>
                         <div class="mt-4">
                             <label for="recommendations" class="form-label">Recommendations</label>
