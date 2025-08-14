@@ -330,7 +330,9 @@ body {
     border: 2px dashed #D1D5DB; /* gray-300 */
     border-radius: 8px;
     position: relative;
-    height: 150px;
+    height: 200px;
+    width: 500px;
+    margin: 0 auto;
 }
 #signatureCanvas {
     width: 100%;
