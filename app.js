@@ -3716,7 +3716,9 @@ function collectInvoiceData() {
     const selectedCountyTaxRadio = document.querySelector('input[name="countyTax"]:checked');
     let selectedCountyValue = selectedCountyTaxRadio ? selectedCountyTaxRadio.value : null;
     if (selectedCountyValue === 'Other') {
-        selectedCountyValue = formData.get('customAreaName') || 'Custom';
+        const customAreaNameInput = document.getElementById('customAreaName');
+        const customName = customAreaNameInput ? customAreaNameInput.value.trim() : '';
+        selectedCountyValue = customName || 'Custom';
     }
 
     const baseData = {
