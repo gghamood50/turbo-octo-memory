@@ -3803,11 +3803,11 @@ function collectInvoiceData() {
     warrantyInvoice.typeOfEquipment = document.getElementById('warrantyTypeOfEquipment').value;
 
     // --- 4. ADD TO PENDING INVOICES ---
-    // We only add invoices that have items or fees.
-    if (customerInvoice.total > 0) {
+    // We add invoices that have a total value OR have a description/equipment type entered.
+    if (customerInvoice.total > 0 || (customerInvoice.jobDescription && customerInvoice.jobDescription.trim()) || (customerInvoice.typeOfEquipment && customerInvoice.typeOfEquipment.trim())) {
         pendingInvoices.push(customerInvoice);
     }
-    if (warrantyInvoice.total > 0) {
+    if (warrantyInvoice.total > 0 || (warrantyInvoice.jobDescription && warrantyInvoice.jobDescription.trim()) || (warrantyInvoice.typeOfEquipment && warrantyInvoice.typeOfEquipment.trim())) {
         pendingInvoices.push(warrantyInvoice);
     }
 
