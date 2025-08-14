@@ -128,6 +128,7 @@ const workerLogoutBtn = document.getElementById('workerLogoutBtn');
 
 // --- Invoice Form Elements ---
 const invoiceFormScreen = document.getElementById('invoiceFormScreen');
+const afterSendInvoiceScreen = document.getElementById('afterSendInvoiceScreen');
 const invoiceFormEl = document.getElementById('invoiceForm');
 const backToCurrentHomeBtn = document.getElementById('backToCurrentHomeBtn');
 const addItemBtn = document.getElementById('addItemBtn');
@@ -1386,6 +1387,17 @@ function listenForWorkerJobs(technicianId, technicianName) {
 
 // --- Form Submit Handlers & Event Listeners ---
 document.addEventListener('DOMContentLoaded', () => {
+    const backToInvoiceFormBtn = document.getElementById('backToInvoiceFormBtn');
+    if (backToInvoiceFormBtn) {
+        backToInvoiceFormBtn.addEventListener('click', () => {
+            if (afterSendInvoiceScreen) {
+                afterSendInvoiceScreen.classList.add('hidden');
+            }
+            if (invoiceFormScreen) {
+                invoiceFormScreen.classList.remove('hidden');
+            }
+        });
+    }
     // This is the main entry point after the page loads.
     // All form listeners and event handlers that need DOM elements will be set up here.
     const adminNavHomeBtn = document.getElementById('adminNavHomeBtn');
