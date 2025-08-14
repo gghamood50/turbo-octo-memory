@@ -3715,8 +3715,6 @@ function collectInvoiceData() {
         customerPhone: document.getElementById('customerPhone').value,
         customerAddress: document.getElementById('customerAddress').value,
         jobAddress: document.getElementById('jobAddress').value,
-        typeOfEquipment: document.getElementById('typeOfEquipment').value,
-        jobDescription: document.getElementById('jobDescription').value,
         recommendations: document.getElementById('recommendations').value,
         paymentMethod: document.querySelector('input[name="paymentMethod"]:checked')?.value || null,
         chequeNumber: document.getElementById('chequeNumber').value.trim() || null,
@@ -3783,6 +3781,12 @@ function collectInvoiceData() {
     // --- NEW LOGIC: Tax is applied only to parts/items ---
     warrantyInvoice.salesTaxAmount = warrantyInvoice.subtotal * (warrantyInvoice.salesTaxRate / 100);
     warrantyInvoice.total = warrantyInvoice.subtotal + warrantyInvoice.labor + warrantyInvoice.serviceCall + warrantyInvoice.salesTaxAmount;
+
+    // --- NEW LOGIC: Add separate descriptions to each invoice object ---
+    customerInvoice.jobDescription = document.getElementById('nonCoveredJobDescription').value;
+    customerInvoice.typeOfEquipment = document.getElementById('nonCoveredTypeOfEquipment').value;
+    warrantyInvoice.jobDescription = document.getElementById('warrantyJobDescription').value;
+    warrantyInvoice.typeOfEquipment = document.getElementById('warrantyTypeOfEquipment').value;
 
     // --- 4. ADD TO PENDING INVOICES ---
     // We only add invoices that have items or fees.
