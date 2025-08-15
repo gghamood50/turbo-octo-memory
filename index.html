@@ -807,6 +807,23 @@
         </div>
     </div>
 
+    <div id="rescheduleModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">Reschedule Job</h2>
+                <span class="close-button">&times;</span>
+            </div>
+            <div class="modal-body">
+                <p>Please provide a reason for rescheduling:</p>
+                <textarea id="rescheduleReason" class="form-input" rows="3"></textarea>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary-stitch cancel-btn">Cancel</button>
+                <button class="btn-primary-stitch confirm-btn">Confirm</button>
+            </div>
+        </div>
+    </div>
+
     <div id="invoiceViewModal" class="modal" style="display: none;">
         <div class="modal-content">
             <div class="modal-header">
@@ -986,6 +1003,10 @@
                 <!-- Job Details Section -->
                 <div class="space-y-3 p-4 bg-white border border-slate-200 rounded-lg">
                     <h3 class="text-lg font-semibold text-slate-700 border-b pb-2 mb-3">Job Details</h3>
+                    <div id="rescheduleReasonContainer" class="hidden text-sm p-3 mb-3 bg-amber-50 border border-amber-200 rounded-lg">
+                        <p><strong>Reschedule Reason:</strong></p>
+                        <p id="modalScheduleRescheduleReason" class="mt-1 font-bold"></p>
+                    </div>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2 text-sm">
                         <p><strong>Customer:</strong> <span id="modalScheduleCustomer"></span></p>
                         <p><strong>Address:</strong> <span id="modalScheduleAddress"></span></p>
