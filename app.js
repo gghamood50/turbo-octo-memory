@@ -716,7 +716,7 @@ function openAllJobsOverlay(invoices, technicianName = 'All Technicians') {
 
     const filteredInvoices = technicianName === 'All Technicians'
         ? invoices
-        : invoices.filter(invoice => invoice.workerName === technicianName);
+        : invoices.filter(invoice => invoice.workerName && invoice.workerName.toLowerCase() === technicianName.toLowerCase());
 
     const sortedInvoices = [...filteredInvoices].sort((a, b) => (b.createdAt?.toDate() || 0) - (a.createdAt?.toDate() || 0));
     title.textContent = `${technicianName} - Completed Jobs (${sortedInvoices.length})`;
