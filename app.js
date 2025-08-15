@@ -41,6 +41,7 @@ let allWarrantiesData = [];
 let allInvoicesData = [];
 let currentProvider = null;
 let currentFilteredData = [];
+let currentJobToReschedule = null;
 
 
 // --- DOM Elements ---
@@ -178,7 +179,7 @@ function renderJobs(jobs) {
         let statusClass = 'status-needs-scheduling';
         let actionsHtml = '';
 
-        if (statusText === 'Needs Scheduling') {
+        if (statusText === 'Needs Scheduling' || statusText.startsWith('Rescheduled by')) {
             statusClass = 'status-needs-scheduling';
             actionsHtml = `
                 <button class="btn-secondary-stitch schedule-job-btn" data-id="${job.id}">Schedule Manually</button>
@@ -1051,7 +1052,26 @@ function renderWorkerPwaView(jobs, technicianName) {
     const timeSlotOrder = { "8am to 2pm": 1, "9am to 4pm": 2, "12pm to 6pm": 3 };
     const sortedJobs = [...jobs].sort((a, b) => (timeSlotOrder[a.timeSlot] || 99) - (timeSlotOrder[b.timeSlot] || 99));
 
-    workerTodaysRouteEl.innerHTML = sortedJobs.map(job => `
+    workerTodaysRouteEl.innerHTML = sortedJobs.map(job => {
+        if (job.status && job.status.startsWith('Rescheduled by')) {
+            return `
+        <div class="flex items-center gap-4 bg-slate-50 px-4 min-h-[72px] py-3 justify-between border-b border-slate-100 opacity-60">
+            <div class="flex items-center gap-4 overflow-hidden">
+                <div class="text-slate-400 flex items-center justify-center rounded-lg bg-slate-200 shrink-0 size-12">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24px" height="24px" fill="currentColor" viewBox="0 0 256 256"><path d="M128,24A104,104,0,1,0,232,128,104.11,104.11,0,0,0,128,24Zm0,192a88,88,0,1,1,88-88A88.1,88.1,0,0,1,128,216Zm64-88a8,8,0,0,1-8,8H128a8,8,0,0,1-8-8V72a8,8,0,0,1,16,0v48h48A8,8,0,0,1,192,128Z"></path></svg>
+                </div>
+                <div class="flex flex-col justify-center overflow-hidden">
+                    <p class="text-slate-500 text-base font-medium leading-normal truncate" style="text-decoration: line-through;">${job.timeSlot || 'Anytime'}</p>
+                    <p class="text-slate-400 text-sm font-normal leading-normal truncate">${job.address}</p>
+                </div>
+            </div>
+            <div class="shrink-0">
+                <span class="status-pill status-offline">Rescheduled</span>
+            </div>
+        </div>
+            `;
+        } else {
+            return `
         <div class="flex items-center gap-4 bg-white px-4 min-h-[72px] py-3 justify-between border-b border-slate-100 cursor-pointer hover:bg-slate-50 worker-job-item" data-id="${job.id}">
             <div class="flex items-center gap-4 overflow-hidden">
                 <div class="text-[#111418] flex items-center justify-center rounded-lg bg-[#f0f2f5] shrink-0 size-12">
@@ -1068,7 +1088,9 @@ function renderWorkerPwaView(jobs, technicianName) {
                 </div>
             </div>
         </div>
-    `).join('');
+    `;
+        }
+    }).join('');
 }
 
 // --- Function to show detailed job view for worker ---
@@ -1165,6 +1187,8 @@ function showWorkerJobDetails(job) {
             </button>
             <button
               class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-[#f0f2f5] text-[#111418] text-sm font-bold leading-normal tracking-[0.015em] w-full"
+              id="rescheduleBtn"
+              data-id="${job.id}"
             >
               <span class="truncate">Reschedule</span>
             </button>
@@ -1187,6 +1211,16 @@ function showWorkerJobDetails(job) {
         });
     }
 
+    const rescheduleBtn = document.getElementById('rescheduleBtn');
+    if (rescheduleBtn) {
+        rescheduleBtn.addEventListener('click', () => {
+            const jobId = rescheduleBtn.dataset.id;
+            const jobData = currentWorkerAssignedJobs.find(j => j.id === jobId);
+            if (jobData) {
+                openRescheduleModal(jobData);
+            }
+        });
+    }
 }
 
 
@@ -1219,6 +1253,52 @@ navLinks.forEach(link => {
 });
 
 // --- Modal Logic ---
+function openRescheduleModal(job) {
+    currentJobToReschedule = job;
+    const rescheduleModal = document.getElementById('rescheduleModal');
+    const reasonInput = document.getElementById('rescheduleReason');
+    reasonInput.value = '';
+    rescheduleModal.style.display = 'block';
+}
+
+function closeRescheduleModal() {
+    const rescheduleModal = document.getElementById('rescheduleModal');
+    rescheduleModal.style.display = 'none';
+    currentJobToReschedule = null;
+}
+
+async function handleRescheduleConfirm() {
+    if (!currentJobToReschedule) return;
+
+    const reason = document.getElementById('rescheduleReason').value.trim();
+    if (!reason) {
+        showMessage('A reason for rescheduling is required.', 'error');
+        return;
+    }
+
+    const jobRef = firebase.firestore().doc(`jobs/${currentJobToReschedule.id}`);
+    const newStatus = `Rescheduled by ${currentWorkerTechnicianName || 'Worker'}`;
+
+    try {
+        await jobRef.update({
+            status: newStatus,
+            rescheduleReason: reason
+        });
+        showMessage('Job has been rescheduled.', 'success');
+        closeRescheduleModal();
+        // The listener will automatically refresh the view, but we need to go back to the list
+        if (workerNameEl) workerNameEl.textContent = `Hello, ${currentWorkerTechnicianName}`;
+        if (workerCurrentDateEl) workerCurrentDateEl.style.display = 'block';
+        const todaysRouteHeading = document.getElementById('todaysRouteHeading');
+        if (todaysRouteHeading) todaysRouteHeading.style.display = 'block';
+        renderWorkerPwaView(currentWorkerAssignedJobs, currentWorkerTechnicianName);
+
+    } catch (error) {
+        console.error("Error rescheduling job:", error);
+        showMessage('Failed to reschedule job. Please try again.', 'error');
+    }
+}
+
 function openEditTechModal(tech) {
     if (!tech) return;
     document.getElementById('modalTechId').value = tech.id;
@@ -1243,6 +1323,16 @@ function openScheduleJobModal(job) {
     document.getElementById('modalScheduleWarrantyProvider').textContent = job.warrantyProvider || 'N/A';
     document.getElementById('modalSchedulePlanType').textContent = job.planType || 'N/A';
     document.getElementById('modalScheduleDispatchOrPoNumber').textContent = job.dispatchOrPoNumber || 'N/A';
+
+    const reasonContainer = document.getElementById('rescheduleReasonContainer');
+    const reasonEl = document.getElementById('modalScheduleRescheduleReason');
+
+    if (job.rescheduleReason) {
+        reasonEl.textContent = job.rescheduleReason;
+        reasonContainer.classList.remove('hidden');
+    } else {
+        reasonContainer.classList.add('hidden');
+    }
 
     const dateInput = document.getElementById('modalJobDate');
     dateInput.value = job.scheduledDate || new Date().toISOString().split('T')[0];
@@ -1416,7 +1506,6 @@ function listenForWorkerJobs(technicianId, technicianName) {
 
     const jobsQuery = firebase.firestore().collection("jobs")
         .where("assignedTechnicianId", "==", technicianId)
-        .where("status", "==", "Awaiting completion")
         .where("scheduledDate", "==", todayDateString);
 
     workerJobsListener = jobsQuery.onSnapshot((snapshot) => {
@@ -1933,6 +2022,17 @@ if(saveInvoiceBtn) {
     if(closeLogPartUsageModalButton) closeLogPartUsageModalButton.addEventListener('click', closeLogPartUsageModal);
     if(cancelLogPartUsageButton) cancelLogPartUsageButton.addEventListener('click', closeLogPartUsageModal);
     
+    const rescheduleModal = document.getElementById('rescheduleModal');
+    if (rescheduleModal) {
+        const confirmBtn = rescheduleModal.querySelector('.confirm-btn');
+        const cancelBtn = rescheduleModal.querySelector('.cancel-btn');
+        const closeBtn = rescheduleModal.querySelector('.close-button');
+
+        confirmBtn.addEventListener('click', handleRescheduleConfirm);
+        cancelBtn.addEventListener('click', closeRescheduleModal);
+        closeBtn.addEventListener('click', closeRescheduleModal);
+    }
+
     // Modal Open Buttons
     if(openAddJobModalButton) openAddJobModalButton.addEventListener('click', () => {
         addJobModal.style.display = 'block';
@@ -1992,7 +2092,8 @@ if(saveInvoiceBtn) {
         const updatedData = {
             status: 'Scheduled',
             scheduledDate: document.getElementById('modalJobDate').value,
-            timeSlot: document.getElementById('modalJobTimeSlot').value
+            timeSlot: document.getElementById('modalJobTimeSlot').value,
+            rescheduleReason: firebase.firestore.FieldValue.delete()
         };
         try {
             await jobRef.update(updatedData);
