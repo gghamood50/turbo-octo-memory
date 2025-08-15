@@ -678,21 +678,21 @@ function openInvoiceDetailOverlay(warranty, invoice) {
     invoiceDetailOverlay.classList.add('is-visible');
 }
 
-function openAllJobsOverlay(warranties, technicianName = 'All Technicians') {
+function openAllJobsOverlay(invoices, technicianName = 'All Technicians') {
     const tableBody = document.getElementById('allJobsTableBody');
     const title = document.getElementById('allJobsTitle');
     const allJobsOverlay = document.getElementById('allJobsOverlay');
     if (!tableBody || !allJobsOverlay) return;
 
-    const filteredWarranties = technicianName === 'All Technicians'
-        ? warranties
-        : warranties.filter(w => w.job?.assignedTechnicianName === technicianName);
+    const filteredInvoices = technicianName === 'All Technicians'
+        ? invoices
+        : invoices.filter(invoice => invoice.workerName === technicianName);
 
-    const sortedWarranties = [...filteredWarranties].sort((a, b) => (b.completionDate?.toDate() || 0) - (a.completionDate?.toDate() || 0));
-    title.textContent = `${technicianName} - Completed Jobs (${sortedWarranties.length})`;
-    tableBody.innerHTML = sortedWarranties.map(w => {
-        const completionDate = w.completionDate?.toDate().toLocaleDateString() || 'N/A';
-        return `<tr><td class="font-medium text-slate-800">${w.job?.customer||'N/A'}</td><td>${w.job?.address||'N/A'}</td><td>${completionDate}</td><td>${w.job?.assignedTechnicianName||'N/A'}</td><td><button class="btn-secondary-stitch view-warranty-btn" data-id="${w.id}">View Details</button></td></tr>`;
+    const sortedInvoices = [...filteredInvoices].sort((a, b) => (b.createdAt?.toDate() || 0) - (a.createdAt?.toDate() || 0));
+    title.textContent = `${technicianName} - Completed Jobs (${sortedInvoices.length})`;
+    tableBody.innerHTML = sortedInvoices.map(invoice => {
+        const completionDate = invoice.createdAt?.toDate().toLocaleDateString() || 'N/A';
+        return `<tr><td class="font-medium text-slate-800">${invoice.customerName||'N/A'}</td><td>${invoice.customerAddress||'N/A'}</td><td>${completionDate}</td><td>${invoice.workerName||'N/A'}</td><td><button class="btn-secondary-stitch view-invoice-btn" data-id="${invoice.id}">View Details</button></td></tr>`;
     }).join('');
     
     allJobsOverlay.classList.add('is-visible');
