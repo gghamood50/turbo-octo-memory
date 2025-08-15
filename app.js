@@ -712,19 +712,48 @@ function openAllJobsOverlay(invoices, technicianName = 'All Technicians') {
     const tableBody = document.getElementById('allJobsTableBody');
     const title = document.getElementById('allJobsTitle');
     const allJobsOverlay = document.getElementById('allJobsOverlay');
-    if (!tableBody || !allJobsOverlay) return;
+    const searchInput = document.getElementById('jobsSearchInput');
+    if (!tableBody || !allJobsOverlay || !searchInput) return;
 
-    const filteredInvoices = technicianName === 'All Technicians'
+    const baseFilteredInvoices = technicianName === 'All Technicians'
         ? invoices
         : invoices.filter(invoice => invoice.workerName && invoice.workerName.toLowerCase() === technicianName.toLowerCase());
 
-    const sortedInvoices = [...filteredInvoices].sort((a, b) => (b.createdAt?.toDate() || 0) - (a.createdAt?.toDate() || 0));
-    title.textContent = `${technicianName} - Completed Jobs (${sortedInvoices.length})`;
-    tableBody.innerHTML = sortedInvoices.map(invoice => {
-        const completionDate = invoice.createdAt?.toDate().toLocaleDateString() || 'N/A';
-        return `<tr><td class="font-medium text-slate-800">${invoice.customerName||'N/A'}</td><td>${invoice.customerAddress||'N/A'}</td><td>${completionDate}</td><td>${invoice.workerName||'N/A'}</td><td><button class="btn-secondary-stitch view-invoice-btn" data-id="${invoice.id}">View Details</button></td></tr>`;
-    }).join('');
+    const renderJobs = (invoicesToRender) => {
+        const sortedInvoices = [...invoicesToRender].sort((a, b) => (b.createdAt?.toDate() || 0) - (a.createdAt?.toDate() || 0));
+        title.textContent = `${technicianName} - Completed Jobs (${sortedInvoices.length})`;
+        tableBody.innerHTML = sortedInvoices.map(invoice => {
+            const completionDate = invoice.createdAt?.toDate().toLocaleDateString() || 'N/A';
+            return `<tr><td class="font-medium text-slate-800">${invoice.customerName||'N/A'}</td><td>${invoice.customerAddress||'N/A'}</td><td>${completionDate}</td><td>${invoice.workerName||'N/A'}</td><td><button class="btn-secondary-stitch view-invoice-btn" data-id="${invoice.id}">View Details</button></td></tr>`;
+        }).join('');
+    };
+
+    renderJobs(baseFilteredInvoices);
     
+    searchInput.value = '';
+    searchInput.oninput = () => {
+        const searchTerms = searchInput.value.toLowerCase().split(' ').filter(term => term.trim() !== '');
+        
+        const searchFilteredInvoices = baseFilteredInvoices.filter(invoice => {
+            if (searchTerms.length === 0) return true;
+
+            return searchTerms.every(term => {
+                const invoiceDate = invoice.createdAt?.toDate().toLocaleDateString().toLowerCase() || '';
+                
+                return (
+                    (invoice.customerName && invoice.customerName.toLowerCase().includes(term)) ||
+                    (invoice.customerAddress && invoice.customerAddress.toLowerCase().includes(term)) ||
+                    (invoice.invoiceNumber && invoice.invoiceNumber.toLowerCase().includes(term)) ||
+                    (invoice.customerPhone && invoice.customerPhone.toLowerCase().includes(term)) ||
+                    (invoice.poNumber && invoice.poNumber.toLowerCase().includes(term)) ||
+                    (invoiceDate.includes(term)) ||
+                    (invoice.warrantyName && invoice.warrantyName.toLowerCase().includes(term))
+                );
+            });
+        });
+        renderJobs(searchFilteredInvoices);
+    };
+
     allJobsOverlay.classList.add('is-visible');
 }
 
@@ -743,13 +772,24 @@ function openTechnicianInvoicesOverlay(technicianName) {
 
     searchInput.value = '';
     searchInput.oninput = () => {
-        const searchTerm = searchInput.value.toLowerCase();
+        const searchTerms = searchInput.value.toLowerCase().split(' ').filter(term => term.trim() !== '');
+        
         const searchFilteredInvoices = filteredInvoices.filter(invoice => {
-            return (
-                (invoice.invoiceNumber && invoice.invoiceNumber.toLowerCase().includes(searchTerm)) ||
-                (invoice.customerName && invoice.customerName.toLowerCase().includes(searchTerm)) ||
-                (invoice.customerAddress && invoice.customerAddress.toLowerCase().includes(searchTerm))
-            );
+            if (searchTerms.length === 0) return true;
+
+            return searchTerms.every(term => {
+                const invoiceDate = invoice.createdAt?.toDate().toLocaleDateString().toLowerCase() || '';
+                
+                return (
+                    (invoice.customerName && invoice.customerName.toLowerCase().includes(term)) ||
+                    (invoice.customerAddress && invoice.customerAddress.toLowerCase().includes(term)) ||
+                    (invoice.invoiceNumber && invoice.invoiceNumber.toLowerCase().includes(term)) ||
+                    (invoice.customerPhone && invoice.customerPhone.toLowerCase().includes(term)) ||
+                    (invoice.poNumber && invoice.poNumber.toLowerCase().includes(term)) ||
+                    (invoiceDate.includes(term)) ||
+                    (invoice.warrantyName && invoice.warrantyName.toLowerCase().includes(term))
+                );
+            });
         });
         renderTechnicianInvoices(searchFilteredInvoices, tableBody);
     };
@@ -799,13 +839,24 @@ function openAllInvoicesOverlay() {
 
     searchInput.value = '';
     searchInput.oninput = () => {
-        const searchTerm = searchInput.value.toLowerCase();
+        const searchTerms = searchInput.value.toLowerCase().split(' ').filter(term => term.trim() !== '');
+        
         const searchFilteredInvoices = allInvoicesData.filter(invoice => {
-            return (
-                (invoice.invoiceNumber && invoice.invoiceNumber.toLowerCase().includes(searchTerm)) ||
-                (invoice.customerName && invoice.customerName.toLowerCase().includes(searchTerm)) ||
-                (invoice.customerAddress && invoice.customerAddress.toLowerCase().includes(searchTerm))
-            );
+            if (searchTerms.length === 0) return true;
+
+            return searchTerms.every(term => {
+                const invoiceDate = invoice.createdAt?.toDate().toLocaleDateString().toLowerCase() || '';
+                
+                return (
+                    (invoice.customerName && invoice.customerName.toLowerCase().includes(term)) ||
+                    (invoice.customerAddress && invoice.customerAddress.toLowerCase().includes(term)) ||
+                    (invoice.invoiceNumber && invoice.invoiceNumber.toLowerCase().includes(term)) ||
+                    (invoice.customerPhone && invoice.customerPhone.toLowerCase().includes(term)) ||
+                    (invoice.poNumber && invoice.poNumber.toLowerCase().includes(term)) ||
+                    (invoiceDate.includes(term)) ||
+                    (invoice.warrantyName && invoice.warrantyName.toLowerCase().includes(term))
+                );
+            });
         });
         renderTechnicianInvoices(searchFilteredInvoices, tableBody);
     };
@@ -2411,18 +2462,6 @@ if(saveInvoiceBtn) {
         });
     }
     
-    // Search logic for All Jobs overlay
-    const jobsSearchInput = document.getElementById('jobsSearchInput');
-    if (jobsSearchInput) {
-        jobsSearchInput.addEventListener('input', (e) => {
-            const searchTerm = e.target.value.toLowerCase();
-            const rows = document.getElementById('allJobsTableBody').getElementsByTagName('tr');
-            Array.from(rows).forEach(row => {
-                const rowText = row.textContent.toLowerCase();
-                row.style.display = rowText.includes(searchTerm) ? '' : 'none';
-            });
-        });
-    }
 
     if (workerTodaysRouteEl) {
         workerTodaysRouteEl.addEventListener('click', (event) => {
