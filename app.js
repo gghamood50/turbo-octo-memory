@@ -371,6 +371,36 @@ function renderInvoices(invoices) {
     }).join('');
 }
 
+function renderWarrantyInvoices(invoices) {
+    const warrantyTableBody = document.getElementById('warrantyTableBody');
+    if (!warrantyTableBody) return;
+
+    warrantyTableBody.innerHTML = '';
+
+    if (invoices.length === 0) {
+        warrantyTableBody.innerHTML = `<tr><td colspan="7" class="text-center text-slate-500 py-4">No warranty invoices found.</td></tr>`;
+        return;
+    }
+
+    const sortedInvoices = [...invoices].sort((a, b) => (b.createdAt?.toDate() || 0) - (a.createdAt?.toDate() || 0));
+
+    warrantyTableBody.innerHTML = sortedInvoices.map(invoice => {
+        const invoiceDate = invoice.createdAt?.toDate().toLocaleDateString() || 'N/A';
+        const statusClass = invoice.status === 'paid' ? 'status-completed' : 'status-needs-scheduling';
+        return `
+            <tr>
+                <td class="font-medium text-slate-800">${invoice.invoiceNumber || 'N/A'}</td>
+                <td>${invoice.customerName || 'N/A'}</td>
+                <td>${invoiceDate}</td>
+                <td><span class="status-pill ${(invoice.invoiceType || '').toLowerCase() === 'warranty' ? 'status-awaiting-completion' : 'status-link-sent'}">${invoice.invoiceType || 'N/A'}</span></td>
+                <td>${formatCurrency(invoice.total)}</td>
+                <td><span class="status-pill ${statusClass}">${invoice.status || 'N/A'}</span></td>
+                <td><button class="btn-secondary-stitch view-invoice-btn" data-id="${invoice.id}">View Details</button></td>
+            </tr>
+        `;
+    }).join('');
+}
+
 function renderTechnicians(technicians) {
     allTechniciansData = technicians;
     if (!technicianCardsContainer) return;
@@ -532,7 +562,7 @@ function updateDashboard(data) {
     currentFilteredData = data; // Store current filtered data
     renderInvoiceStats(data);
     renderProviderCardCounts(data);
-    renderWarranties(data);
+    renderWarrantyInvoices(data.slice(0, 5));
 }
 
 function renderInvoiceDashboard(invoices) {
@@ -841,7 +871,10 @@ function closeOverlay(overlay) { if(overlay) overlay.classList.remove('is-visibl
 function listenForWarranties() {
     const warrantiesQuery = firebase.firestore().collection("invoices").where("invoiceType", "in", ["warranty", "Warranty", "WARRANTY"]);
     warrantiesQuery.onSnapshot((snapshot) => {
-        allWarrantiesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        let warranties = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        // Sort the array on the client-side to avoid needing a composite index
+        warranties.sort((a, b) => (b.createdAt?.toDate() || 0) - (a.createdAt?.toDate() || 0));
+        allWarrantiesData = warranties; // Store the sorted data
         updateDashboard(allWarrantiesData);
     }, (error) => {
         console.error("Error listening for warranties:", error);
@@ -857,43 +890,6 @@ function listenForAllInvoices() {
     }, (error) => {
         console.error("Error listening for all invoices:", error);
     });
-}
-
-function renderWarranties(invoices) {
-    const warrantyTableBody = document.getElementById('warrantyTableBody');
-    if (!warrantyTableBody) return;
-
-    warrantyTableBody.innerHTML = '';
-
-    if (invoices.length === 0) {
-        warrantyTableBody.innerHTML = `<tr><td colspan="5" class="text-center text-slate-500 py-4">No warranty invoices found.</td></tr>`;
-        return;
-    }
-    
-    const viewAllBtn = document.getElementById('viewAllInvoicesBtn');
-
-    const sortedInvoices = [...invoices].sort((a, b) => (b.createdAt?.toDate() || 0) - (a.createdAt?.toDate() || 0));
-    const invoicesToRender = sortedInvoices.slice(0, 5);
-    
-    if (viewAllBtn) {
-        viewAllBtn.style.display = 'inline';
-    }
-
-    warrantyTableBody.innerHTML = invoicesToRender.map(invoice => {
-        const completionDate = invoice.createdAt && typeof invoice.createdAt.toDate === 'function' 
-            ? invoice.createdAt.toDate().toLocaleDateString() 
-            : 'N/A';
-            
-        return `
-            <tr>
-                <td class="font-medium text-slate-800">${invoice.customerName || 'N/A'}</td>
-                <td>${invoice.customerAddress || 'N/A'}</td>
-                <td>${completionDate}</td>
-                <td>${invoice.workerName || 'N/A'}</td>
-                <td><button class="btn-secondary-stitch view-invoice-btn" data-id="${invoice.id}">View Details</button></td>
-            </tr>
-        `;
-    }).join('');
 }
 
 function populateTechnicianDropdowns() {
