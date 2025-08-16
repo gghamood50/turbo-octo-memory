@@ -931,7 +931,7 @@
                 <h2 id="modalTechTitle">Edit Technician</h2>
                 <span class="close-button" id="closeEditTechModal">&times;</span>
             </div>
-            <form id="editTechForm" class="space-y-4">
+            <form id="editTechForm" class="space-y-4 p-4">
                 <input type="hidden" id="modalTechId">
                 <div>
                     <label for="modalTechName" class="form-label">Technician Name</label>
@@ -957,7 +957,9 @@
                     <input type="number" id="modalTechMaxJobs" class="form-input" placeholder="e.g., 5" min="0">
                 </div>
                 <div class="flex justify-between items-center pt-2">
-                    <button type="button" id="deleteTechBtn" class="btn-danger-stitch">Delete</button>
+                    <button type="button" id="deleteTechBtn" class="btn-danger-stitch">
+                        <i class="fas fa-trash-alt mr-2"></i>Delete
+                    </button>
                     <div class="flex space-x-3">
                         <button type="button" id="cancelEditTech" class="btn-secondary-stitch bg-slate-200 text-slate-700 border-slate-300 hover:bg-slate-300">Cancel</button>
                         <button type="submit" id="saveTechBtn" class="btn-primary-stitch">Save Changes</button>
