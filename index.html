@@ -198,6 +198,9 @@
                                 <h1 class="text-slate-900 text-3xl font-bold leading-tight tracking-tight">Technician Management</h1>
                                 <p class="text-slate-600 text-base font-normal leading-normal">Manage your field service team's status, location, and capacity.</p>
                             </div>
+                            <button id="addTechnicianBtn" class="btn-primary-stitch">
+                                <span class="material-icons-outlined text-lg">add_circle_outline</span>Add Technician
+                            </button>
                         </div>
                         <div id="technician-cards-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 mt-6">
                             <!-- Technician cards will be dynamically inserted here -->
@@ -925,11 +928,15 @@
     <div id="editTechnicianModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h2 id="modalTechName">Edit Technician</h2>
+                <h2 id="modalTechTitle">Edit Technician</h2>
                 <span class="close-button" id="closeEditTechModal">&times;</span>
             </div>
             <form id="editTechForm" class="space-y-4">
                 <input type="hidden" id="modalTechId">
+                <div>
+                    <label for="modalTechName" class="form-label">Technician Name</label>
+                    <input type="text" id="modalTechName" class="form-input" placeholder="e.g., John Doe" required>
+                </div>
                 <div>
                     <label for="modalTechStatus" class="form-label">Status</label>
                     <select id="modalTechStatus" class="form-input">
@@ -938,16 +945,23 @@
                     </select>
                 </div>
                 <div>
-                    <label for="modalTechLocation" class="form-label">Current Location / Starting Point</label>
-                    <input type="text" id="modalTechLocation" class="form-input" placeholder="e.g., 123 Main St, Los Angeles, CA">
+                    <label for="modalTechStartLocation" class="form-label">Starting Location</label>
+                    <input type="text" id="modalTechStartLocation" class="form-input" placeholder="e.g., 123 Main St, Los Angeles, CA">
+                </div>
+                <div>
+                    <label for="modalTechEndLocation" class="form-label">End Location</label>
+                    <input type="text" id="modalTechEndLocation" class="form-input" placeholder="e.g., 456 Oak Ave, Los Angeles, CA">
                 </div>
                 <div>
                     <label for="modalTechMaxJobs" class="form-label">Max Jobs Per Day</label>
                     <input type="number" id="modalTechMaxJobs" class="form-input" placeholder="e.g., 5" min="0">
                 </div>
-                <div class="flex justify-end space-x-3 pt-2">
-                    <button type="button" id="cancelEditTech" class="btn-secondary-stitch bg-slate-200 text-slate-700 border-slate-300 hover:bg-slate-300">Cancel</button>
-                    <button type="submit" class="btn-primary-stitch">Save Changes</button>
+                <div class="flex justify-between items-center pt-2">
+                    <button type="button" id="deleteTechBtn" class="btn-danger-stitch">Delete</button>
+                    <div class="flex space-x-3">
+                        <button type="button" id="cancelEditTech" class="btn-secondary-stitch bg-slate-200 text-slate-700 border-slate-300 hover:bg-slate-300">Cancel</button>
+                        <button type="submit" id="saveTechBtn" class="btn-primary-stitch">Save Changes</button>
+                    </div>
                 </div>
             </form>
         </div>
