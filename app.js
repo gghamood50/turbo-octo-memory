@@ -419,8 +419,9 @@ function renderTechnicians(technicians) {
                     <p class="text-sm text-slate-500">Lead Technician</p>
                 </div>
             </div>
-            <p class="text-sm text-slate-600 truncate"><span class="material-icons-outlined text-sm text-green-600 vm">location_on</span> ${tech.currentLocation || 'Not set'}</p>
-            <p class="text-sm text-slate-600"><span class="material-icons-outlined text-sm text-green-600 vm">speed</span> Capacity: ${tech.maxJobs} jobs/day</p>
+            <p class="text-sm text-slate-600 truncate"><span class="material-icons-outlined text-sm text-green-600 vm">location_on</span> <strong>Start:</strong> ${tech.startLocation || tech.currentLocation || 'Not set'}</p>
+            <p class="text-sm text-slate-600 truncate"><span class="material-icons-outlined text-sm text-red-600 vm">location_on</span> <strong>End:</strong> ${tech.endLocation || 'Not set'}</p>
+            <p class="text-sm text-slate-600"><span class="material-icons-outlined text-sm text-blue-600 vm">speed</span> Capacity: ${tech.maxJobs} jobs/day</p>
             <div class="mt-2 flex items-center justify-between">
                 <span class="status-pill ${statusClass}">${tech.status}</span>
                 <button class="btn-secondary-stitch manage-tech-btn" data-id="${tech.id}">Manage</button>
@@ -1299,13 +1300,35 @@ async function handleRescheduleConfirm() {
     }
 }
 
-function openEditTechModal(tech) {
-    if (!tech) return;
-    document.getElementById('modalTechId').value = tech.id;
-    document.getElementById('modalTechName').textContent = `Edit ${tech.name}`;
-    document.getElementById('modalTechStatus').value = tech.status;
-    document.getElementById('modalTechLocation').value = tech.currentLocation;
-    document.getElementById('modalTechMaxJobs').value = tech.maxJobs;
+function openEditTechModal(tech = null) {
+    const modalTitle = document.getElementById('modalTechTitle');
+    const techIdInput = document.getElementById('modalTechId');
+    const techNameInput = document.getElementById('modalTechName');
+    const techStatusInput = document.getElementById('modalTechStatus');
+    const techStartLocationInput = document.getElementById('modalTechStartLocation');
+    const techEndLocationInput = document.getElementById('modalTechEndLocation');
+    const techMaxJobsInput = document.getElementById('modalTechMaxJobs');
+    const saveBtn = document.getElementById('saveTechBtn');
+    const deleteBtn = document.getElementById('deleteTechBtn');
+
+    if (tech) { // Edit mode
+        modalTitle.textContent = `Edit ${tech.name}`;
+        techIdInput.value = tech.id;
+        techNameInput.value = tech.name;
+        techStatusInput.value = tech.status;
+        techStartLocationInput.value = tech.startLocation || tech.currentLocation || '';
+        techEndLocationInput.value = tech.endLocation || '';
+        techMaxJobsInput.value = tech.maxJobs || 5;
+        saveBtn.textContent = 'Save Changes';
+        deleteBtn.style.display = 'block';
+        deleteBtn.dataset.id = tech.id; // Store id for the delete handler
+    } else { // Add mode
+        modalTitle.textContent = 'Add New Technician';
+        editTechForm.reset(); // Clear all form fields
+        techIdInput.value = '';
+        saveBtn.textContent = 'Add Technician';
+        deleteBtn.style.display = 'none';
+    }
     editTechModal.style.display = 'block';
 }
 
@@ -1421,10 +1444,10 @@ async function initializeTechnicians() {
     const snapshot = await techCollection.get();
     if (snapshot.empty) {
         const defaultTechnicians = [
-            { name: 'Ibaidallah', status: 'Online', currentLocation: '1100 S Flower St, Los Angeles, CA 90015', maxJobs: 8 },
-            { name: 'Khaled', status: 'Online', currentLocation: '4059 Van Nuys Blvd, Sherman Oaks, CA 91403', maxJobs: 5 },
-            { name: 'Ahmed', status: 'Online', currentLocation: '189 The Grove Dr, Los Angeles, CA 90036', maxJobs: 5 },
-            { name: 'Omar', status: 'Offline', currentLocation: 'Home Base', maxJobs: 5 }
+            { name: 'Ibaidallah', status: 'Online', startLocation: '1100 S Flower St, Los Angeles, CA 90015', endLocation: '1100 S Flower St, Los Angeles, CA 90015', maxJobs: 8 },
+            { name: 'Khaled', status: 'Online', startLocation: '4059 Van Nuys Blvd, Sherman Oaks, CA 91403', endLocation: '4059 Van Nuys Blvd, Sherman Oaks, CA 91403', maxJobs: 5 },
+            { name: 'Ahmed', status: 'Online', startLocation: '189 The Grove Dr, Los Angeles, CA 90036', endLocation: '189 The Grove Dr, Los Angeles, CA 90036', maxJobs: 5 },
+            { name: 'Omar', status: 'Offline', startLocation: 'Home Base', endLocation: 'Home Base', maxJobs: 5 }
         ];
         for (const tech of defaultTechnicians) {
             await firebase.firestore().collection('technicians').add(tech);
@@ -2071,17 +2094,28 @@ if(saveInvoiceBtn) {
     if(editTechForm) editTechForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         const techId = document.getElementById('modalTechId').value;
-        const techRef = firebase.firestore().doc(`technicians/${techId}`);
-        const updatedData = {
+        const techData = {
+            name: document.getElementById('modalTechName').value,
             status: document.getElementById('modalTechStatus').value,
-            currentLocation: document.getElementById('modalTechLocation').value,
-            maxJobs: parseInt(document.getElementById('modalTechMaxJobs').value, 10)
+            startLocation: document.getElementById('modalTechStartLocation').value,
+            endLocation: document.getElementById('modalTechEndLocation').value,
+            maxJobs: parseInt(document.getElementById('modalTechMaxJobs').value, 10) || 0,
         };
+
         try {
-            await techRef.update(updatedData);
+            if (techId) { // Update existing technician
+                const techRef = firebase.firestore().doc(`technicians/${techId}`);
+                await techRef.update({
+                    ...techData,
+                    currentLocation: firebase.firestore.FieldValue.delete()
+                });
+            } else { // Add new technician
+                await firebase.firestore().collection('technicians').add(techData);
+            }
             closeEditTechModal();
         } catch (error) {
-            console.error("Error updating technician:", error);
+            console.error("Error saving technician:", error);
+            alert(`Error saving technician: ${error.message}`);
         }
     });
 
@@ -2217,10 +2251,19 @@ if(saveInvoiceBtn) {
 
     // Event Delegation for dynamic buttons
     document.body.addEventListener('click', function(event) {
+        if (event.target.id === 'addTechnicianBtn') {
+            openEditTechModal(null);
+        }
         if (event.target.classList.contains('manage-tech-btn')) {
             const techId = event.target.dataset.id;
             const techData = allTechniciansData.find(t => t.id === techId);
             if(techData) openEditTechModal(techData);
+        }
+        if (event.target.id === 'deleteTechBtn') {
+            const techId = event.target.dataset.id;
+            if (techId) {
+                handleDeleteTechnician(techId);
+            }
         }
         if (event.target.classList.contains('schedule-job-btn')) {
             const jobId = event.target.dataset.id;
@@ -3171,6 +3214,29 @@ function showConfirmationModal(title, message, onConfirm) {
     window.addEventListener('click', outsideClickHandler);
     
     modal.style.display = 'block';
+}
+
+function handleDeleteTechnician(techId) {
+    const tech = allTechniciansData.find(t => t.id === techId);
+    if (!tech) {
+        showMessage('Technician not found.', 'error');
+        return;
+    }
+
+    showConfirmationModal(
+        `Delete ${tech.name}`,
+        `Are you sure you want to delete this technician? This action cannot be undone.`,
+        async () => {
+            try {
+                await firebase.firestore().collection('technicians').doc(techId).delete();
+                showMessage(`${tech.name} has been successfully deleted.`, 'success');
+                closeEditTechModal();
+            } catch (error) {
+                console.error("Error deleting technician:", error);
+                showMessage(`Error deleting technician: ${error.message}`, 'error');
+            }
+        }
+    );
 }
 
 async function showInvoiceScreen(jobId) {
