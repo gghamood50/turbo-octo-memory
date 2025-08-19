@@ -1071,6 +1071,23 @@ function renderWorkerPwaView(jobs, technicianName) {
             </div>
         </div>
             `;
+        } else if (job.status === 'Completed') {
+            return `
+        <div class="flex items-center gap-4 bg-slate-50 px-4 min-h-[72px] py-3 justify-between border-b border-slate-100 opacity-60">
+            <div class="flex items-center gap-4 overflow-hidden">
+                <div class="text-slate-400 flex items-center justify-center rounded-lg bg-slate-200 shrink-0 size-12">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24px" height="24px" fill="currentColor" viewBox="0 0 256 256"><path d="m229.66,77.66-128,128a8,8,0,0,1-11.32,0l-56-56a8,8,0,0,1,11.32-11.32L96,188.69,218.34,66.34a8,8,0,0,1,11.32,11.32Z"></path></svg>
+                </div>
+                <div class="flex flex-col justify-center overflow-hidden">
+                    <p class="text-slate-500 text-base font-medium leading-normal truncate" style="text-decoration: line-through;">${job.timeSlot || 'Anytime'}</p>
+                    <p class="text-slate-400 text-sm font-normal leading-normal truncate">${job.address}</p>
+                </div>
+            </div>
+            <div class="shrink-0">
+                <span class="status-pill status-completed">Completed</span>
+            </div>
+        </div>
+            `;
         } else {
             return `
         <div class="flex items-center gap-4 bg-white px-4 min-h-[72px] py-3 justify-between border-b border-slate-100 cursor-pointer hover:bg-slate-50 worker-job-item" data-id="${job.id}">
