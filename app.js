@@ -3348,10 +3348,13 @@ async function openFitInSheetModal() {
         const jobListContainer = document.getElementById('fitInSheetJobList');
         jobListContainer.innerHTML = ''; // Clear previous content
 
+        const isMovingJob = route.some(job => job.id === currentJobToReschedule.id);
+        const buttonText = isMovingJob ? "Move job here" : "Fit Job Here";
+
         // Render the "Fit here" button for the first position
         jobListContainer.innerHTML += `
             <button class="fit-job-btn w-full text-center p-2 border-2 border-dashed border-green-400 rounded-lg text-green-600 hover:bg-green-50" data-index="0">
-                Fit Job Here (Start of Day)
+                ${buttonText} (Start of Day)
             </button>
         `;
 
@@ -3365,7 +3368,7 @@ async function openFitInSheetModal() {
             `;
             jobListContainer.innerHTML += `
                 <button class="fit-job-btn w-full text-center p-2 border-2 border-dashed border-green-400 rounded-lg text-green-600 hover:bg-green-50" data-index="${index + 1}">
-                    Fit Job Here
+                    ${buttonText}
                 </button>
             `;
         });
@@ -3435,8 +3438,14 @@ async function handleConfirmFitInSheet() {
             timeSlot: newTimeSlot
         };
 
-        // Create the new route
-        const newRoute = [...currentTripSheetForFit.route];
+        // Create the new route by first removing the job if it exists, then inserting it.
+        let newRoute = [...currentTripSheetForFit.route];
+        const existingJobIndex = newRoute.findIndex(job => job.id === currentJobToReschedule.id);
+
+        if (existingJobIndex > -1) {
+            newRoute.splice(existingJobIndex, 1);
+        }
+        
         newRoute.splice(selectedFitIndex, 0, jobToInsert);
 
         // Update trip sheet in Firestore
