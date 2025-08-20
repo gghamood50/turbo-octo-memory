@@ -1399,7 +1399,7 @@ function openScheduleJobModal(job) {
         const schedulingUrl = `${window.location.origin}/scheduling.html?jobId=${job.id}`;
         linkInput.value = schedulingUrl;
         
-        if (job.status && job.status.startsWith('Scheduled')) {
+        if (job.status && (job.status.startsWith('Scheduled') || job.status === 'Awaiting completion')) {
             linkContainer.classList.add('hidden');
         } else {
             linkContainer.classList.remove('hidden');
@@ -1429,11 +1429,21 @@ function openScheduleJobModal(job) {
 
     const confirmBtn = scheduleJobForm.querySelector('button[type="submit"]');
     if (confirmBtn) {
-        if (job.status && job.status.startsWith('Scheduled')) {
+        if (job.status && (job.status.startsWith('Scheduled') || job.status === 'Awaiting completion')) {
             confirmBtn.textContent = 'Confirm Reschedule';
         } else {
             confirmBtn.textContent = 'Confirm Schedule';
         }
+    }
+
+    const assignedToContainer = document.getElementById('modalScheduleAssignedToContainer');
+    const assignedToEl = document.getElementById('modalScheduleAssignedTo');
+
+    if (job.status === 'Awaiting completion' && job.assignedTechnicianName) {
+        if (assignedToEl) assignedToEl.textContent = job.assignedTechnicianName;
+        if (assignedToContainer) assignedToContainer.classList.remove('hidden');
+    } else {
+        if (assignedToContainer) assignedToContainer.classList.add('hidden');
     }
 
     scheduleJobModal.style.display = 'block';
