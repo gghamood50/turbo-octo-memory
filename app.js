@@ -1458,12 +1458,20 @@ async function openScheduleJobModal(job) {
     const assignedToContainer = document.getElementById('modalScheduleAssignedToContainer');
     const assignedToEl = document.getElementById('modalScheduleAssignedTo');
 
+    // Per user clarification, the technician's name should not be shown in this modal.
+    // The original request was to show it, but the latest feedback contradicts this.
+    // Hiding this block to follow the latest instruction.
+    if (assignedToContainer) {
+        assignedToContainer.classList.add('hidden');
+    }
+    /*
     if (job.status === 'Awaiting completion' && job.assignedTechnicianName) {
         if (assignedToEl) assignedToEl.textContent = job.assignedTechnicianName;
         if (assignedToContainer) assignedToContainer.classList.remove('hidden');
     } else {
         if (assignedToContainer) assignedToContainer.classList.add('hidden');
     }
+    */
 
     scheduleJobModal.style.display = 'block';
     await updateScheduleButton(); // Set initial button state
@@ -1682,6 +1690,11 @@ function listenForWorkerJobs(technicianId, technicianName) {
 
 // --- Form Submit Handlers & Event Listeners ---
 document.addEventListener('DOMContentLoaded', () => {
+    // Consolidated DOM element declarations
+    const loginForm = document.getElementById('loginForm');
+    const loginEmailInput = document.getElementById('loginEmail');
+    const loginPasswordInput = document.getElementById('loginPassword');
+    const loginErrorMessage = document.getElementById('loginErrorMessage');
     const backToInvoiceFormBtn = document.getElementById('backToInvoiceFormBtn');
     if (backToInvoiceFormBtn) {
         backToInvoiceFormBtn.addEventListener('click', () => {
@@ -1693,8 +1706,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
-    // This is the main entry point after the page loads.
-    // All form listeners and event handlers that need DOM elements will be set up here.
     const adminNavHomeBtn = document.getElementById('adminNavHomeBtn');
     const adminNavWorkersBtn = document.getElementById('adminNavWorkersBtn');
     const adminNavAddBtn = document.getElementById('adminNavAddBtn');
@@ -3043,11 +3054,6 @@ async function sendAllToOffice(jobId, customerInvoice, warrantyInvoice) {
 
 
     // Login Form
-    const loginForm = document.getElementById('loginForm');
-    const loginEmailInput = document.getElementById('loginEmail');
-    const loginPasswordInput = document.getElementById('loginPassword');
-    const loginErrorMessage = document.getElementById('loginErrorMessage');
-
     // --- "Fit in Sheet" Modal Listeners ---
     const closeFitInSheetModalBtn = document.getElementById('closeFitInSheetModal');
     if (closeFitInSheetModalBtn) closeFitInSheetModalBtn.addEventListener('click', closeFitInSheetModal);
@@ -3060,11 +3066,6 @@ async function sendAllToOffice(jobId, customerInvoice, warrantyInvoice) {
 
 
     // Login Form
-    const loginForm = document.getElementById('loginForm');
-    const loginEmailInput = document.getElementById('loginEmail');
-    const loginPasswordInput = document.getElementById('loginPassword');
-    const loginErrorMessage = document.getElementById('loginErrorMessage');
-
     if (loginForm) {
         loginForm.addEventListener('submit', async (e) => {
             e.preventDefault();
