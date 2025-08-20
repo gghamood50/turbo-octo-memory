@@ -15,14 +15,38 @@ const TWILIO_TOKEN_SECRET_NAME = 'projects/216681158749/secrets/twilio-auth-toke
 const TWILIO_PHONE_SECRET_NAME = 'projects/216681158749/secrets/twilio-phone-number/versions/latest';
 
 exports['send-manual-scheduling-links'] = onRequest({ cors: true }, async (req, res) => {
-    console.log("--- DEBUGGING: Manual 'send-manual-scheduling-links' function triggered. ---");
+    // Add this log to see the request body for debugging
+    console.log("--- DEBUGGING: 'send-manual-scheduling-links' function triggered. Body: ", req.body);
 
     try {
-        const jobsToProcessQuery = firestore.collection('jobs').where('status', '==', 'Needs Scheduling');
-        const jobsSnapshot = await jobsToProcessQuery.get();
+        const { jobId } = req.body; // Destructure jobId from the request body
+        let jobsSnapshot;
+
+        if (jobId) {
+            // If a specific jobId is provided, fetch only that job
+            console.log(`DEBUGGING: Processing single job with ID: ${jobId}`);
+            const jobDoc = await firestore.collection('jobs').doc(jobId).get();
+            if (!jobDoc.exists) {
+                console.error(`DEBUGGING: Job with ID ${jobId} not found.`);
+                res.status(404).send({ message: "Job not found." });
+                return;
+            }
+            // Create a snapshot-like object to maintain a consistent structure
+            jobsSnapshot = {
+                empty: false,
+                size: 1,
+                docs: [jobDoc],
+                forEach: (callback) => [jobDoc].forEach(callback)
+            };
+        } else {
+            // If no jobId is provided, fetch all jobs needing scheduling (original behavior)
+            console.log("DEBUGGING: No specific jobId provided. Fetching all jobs with 'Needs Scheduling' status.");
+            const jobsToProcessQuery = firestore.collection('jobs').where('status', '==', 'Needs Scheduling');
+            jobsSnapshot = await jobsToProcessQuery.get();
+        }
 
         if (jobsSnapshot.empty) {
-            console.log("DEBUGGING: No jobs found with status 'Needs Scheduling'.");
+            console.log("DEBUGGING: No jobs found to process.");
             res.status(200).send({ message: "No jobs needed a scheduling link." });
             return;
         }
