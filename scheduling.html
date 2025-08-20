@@ -141,8 +141,12 @@
 
                 const jobData = jobDoc.data();
 
-                if (jobData.status !== 'Needs Scheduling') {
-                    showError(`This appointment has already been scheduled for ${jobData.scheduledDate || 'a future date'}.`);
+                if (jobData.status && jobData.status.startsWith('Scheduled')) {
+                    // Allow rescheduling
+                    document.querySelector('#schedulingScreen h2').textContent = 'Reschedule Your Appointment';
+                    confirmTimeSlotBtn.textContent = 'Confirm Reschedule';
+                } else if (jobData.status !== 'Needs Scheduling' && jobData.status !== 'Link Sent!') {
+                    showError(`This appointment cannot be scheduled or rescheduled. Status: ${jobData.status}.`);
                     return;
                 }
 
@@ -170,7 +174,8 @@
                         alert("Please select a time slot.");
                         return;
                     }
-
+                    
+                    const originalButtonText = confirmTimeSlotBtn.textContent;
                     confirmTimeSlotBtn.disabled = true;
                     confirmTimeSlotBtn.textContent = 'Confirming...';
 
@@ -190,7 +195,7 @@
                         console.error("Error updating job:", error);
                         showError("There was a problem confirming your appointment. Please try again.");
                         confirmTimeSlotBtn.disabled = false;
-                        confirmTimeSlotBtn.textContent = 'Confirm Appointment';
+                        confirmTimeSlotBtn.textContent = originalButtonText;
                     }
                 });
 
