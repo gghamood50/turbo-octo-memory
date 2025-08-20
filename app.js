@@ -1364,8 +1364,9 @@ function closeEditTechModal() {
     editTechForm.reset();
 }
 
-function openScheduleJobModal(job) {
+async function openScheduleJobModal(job) {
     if (!job) return;
+    currentJobToReschedule = job; // Store the job globally for this modal
     document.getElementById('modalScheduleJobId').value = job.id;
     document.getElementById('modalScheduleCustomer').textContent = job.customer || 'N/A';
     document.getElementById('modalScheduleAddress').textContent = job.address || 'N/A';
@@ -1390,7 +1391,35 @@ function openScheduleJobModal(job) {
     const timeSlotSelect = document.getElementById('modalJobTimeSlot');
     timeSlotSelect.value = job.timeSlot || "";
 
-    // --- New Link Logic ---
+    const confirmBtn = document.getElementById('confirmScheduleBtn');
+
+    // --- "Fit into trip sheet" logic ---
+    const updateScheduleButton = async () => {
+        if (job.status === 'Awaiting completion' && job.assignedTechnicianId) {
+            const selectedDate = dateInput.value;
+            const tripSheetQuery = db.collection("tripSheets")
+                .where("date", "==", selectedDate)
+                .where("technicianId", "==", job.assignedTechnicianId);
+            
+            const snapshot = await tripSheetQuery.get();
+            
+            if (!snapshot.empty) {
+                confirmBtn.textContent = 'Fit into trip sheet';
+            } else {
+                confirmBtn.textContent = 'Confirm Reschedule';
+            }
+        } else if (job.status && job.status.startsWith('Scheduled')) {
+            confirmBtn.textContent = 'Confirm Reschedule';
+        } else {
+            confirmBtn.textContent = 'Confirm Schedule';
+        }
+    };
+
+    dateInput.removeEventListener('change', updateScheduleButton); // Remove old listener
+    dateInput.addEventListener('change', updateScheduleButton);   // Add new one
+    
+    // --- End "Fit into trip sheet" logic ---
+
     const linkContainer = document.getElementById('scheduleModalLinkContainer');
     const linkInput = document.getElementById('scheduleModalLinkInput');
     const copyBtn = document.getElementById('scheduleModalCopyBtn');
@@ -1415,7 +1444,6 @@ function openScheduleJobModal(job) {
             }, 2000);
         };
     }
-    // --- End New Link Logic ---
 
     const sendManualLinkBtn = document.getElementById('sendManualLinkBtn');
     if (sendManualLinkBtn) {
@@ -1426,16 +1454,7 @@ function openScheduleJobModal(job) {
             sendManualLinkBtn.style.visibility = 'hidden';
         }
     }
-
-    const confirmBtn = scheduleJobForm.querySelector('button[type="submit"]');
-    if (confirmBtn) {
-        if (job.status && (job.status.startsWith('Scheduled') || job.status === 'Awaiting completion')) {
-            confirmBtn.textContent = 'Confirm Reschedule';
-        } else {
-            confirmBtn.textContent = 'Confirm Schedule';
-        }
-    }
-
+    
     const assignedToContainer = document.getElementById('modalScheduleAssignedToContainer');
     const assignedToEl = document.getElementById('modalScheduleAssignedTo');
 
@@ -1447,6 +1466,7 @@ function openScheduleJobModal(job) {
     }
 
     scheduleJobModal.style.display = 'block';
+    await updateScheduleButton(); // Set initial button state
 }
 
 function closeScheduleJobModal() {
@@ -2291,19 +2311,28 @@ if(saveInvoiceBtn) {
 
     if(scheduleJobForm) scheduleJobForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const jobId = document.getElementById('modalScheduleJobId').value;
-        const jobRef = firebase.firestore().doc(`jobs/${jobId}`);
-        const updatedData = {
-            status: 'Scheduled',
-            scheduledDate: document.getElementById('modalJobDate').value,
-            timeSlot: document.getElementById('modalJobTimeSlot').value,
-            rescheduleReason: firebase.firestore.FieldValue.delete()
-        };
-        try {
-            await jobRef.update(updatedData);
-            closeScheduleJobModal();
-        } catch (error) {
-            console.error("Error scheduling job:", error);
+        const confirmBtn = document.getElementById('confirmScheduleBtn');
+        
+        if (confirmBtn.textContent === 'Fit into trip sheet') {
+            await openFitInSheetModal();
+        } else {
+            // Existing logic to schedule/reschedule
+            const jobId = document.getElementById('modalScheduleJobId').value;
+            const jobRef = firebase.firestore().doc(`jobs/${jobId}`);
+            const updatedData = {
+                status: 'Scheduled',
+                scheduledDate: document.getElementById('modalJobDate').value,
+                timeSlot: document.getElementById('modalJobTimeSlot').value,
+                rescheduleReason: firebase.firestore.FieldValue.delete()
+            };
+            try {
+                await jobRef.update(updatedData);
+                closeScheduleJobModal();
+                showMessage('Job successfully rescheduled.', 'success');
+            } catch (error) {
+                console.error("Error scheduling job:", error);
+                showMessage('Error rescheduling job.', 'error');
+            }
         }
     });
     
@@ -3019,6 +3048,23 @@ async function sendAllToOffice(jobId, customerInvoice, warrantyInvoice) {
     const loginPasswordInput = document.getElementById('loginPassword');
     const loginErrorMessage = document.getElementById('loginErrorMessage');
 
+    // --- "Fit in Sheet" Modal Listeners ---
+    const closeFitInSheetModalBtn = document.getElementById('closeFitInSheetModal');
+    if (closeFitInSheetModalBtn) closeFitInSheetModalBtn.addEventListener('click', closeFitInSheetModal);
+
+    const cancelFitInSheetBtn = document.getElementById('cancelFitInSheet');
+    if (cancelFitInSheetBtn) cancelFitInSheetBtn.addEventListener('click', closeFitInSheetModal);
+
+    const confirmFitInSheetBtn = document.getElementById('confirmFitInSheet');
+    if (confirmFitInSheetBtn) confirmFitInSheetBtn.addEventListener('click', handleConfirmFitInSheet);
+
+
+    // Login Form
+    const loginForm = document.getElementById('loginForm');
+    const loginEmailInput = document.getElementById('loginEmail');
+    const loginPasswordInput = document.getElementById('loginPassword');
+    const loginErrorMessage = document.getElementById('loginErrorMessage');
+
     if (loginForm) {
         loginForm.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -3241,6 +3287,152 @@ function loadTripSheetsForDate(dateString) {
         if (tripSheetsContainer) tripSheetsContainer.innerHTML = `<div class="text-center py-8 text-red-500"><p>Error loading trip sheets for ${dateString}.</p></div>`;
         if (tripSheetApprovalContainer) tripSheetApprovalContainer.classList.add('hidden');
     });
+}
+
+
+let selectedFitIndex = -1;
+let currentTripSheetForFit = null;
+
+function closeFitInSheetModal() {
+    const modal = document.getElementById('fitInSheetModal');
+    if (modal) modal.style.display = 'none';
+    // Reset state
+    selectedFitIndex = -1;
+    currentTripSheetForFit = null;
+    currentJobToReschedule = null;
+}
+
+async function openFitInSheetModal() {
+    const date = document.getElementById('modalJobDate').value;
+    const techId = currentJobToReschedule.assignedTechnicianId;
+
+    try {
+        const tripSheetQuery = db.collection("tripSheets").where("date", "==", date).where("technicianId", "==", techId);
+        const snapshot = await tripSheetQuery.get();
+
+        if (snapshot.empty) {
+            showMessage('Could not find the trip sheet for the selected date. Please try again.', 'error');
+            return;
+        }
+
+        currentTripSheetForFit = { id: snapshot.docs[0].id, ...snapshot.docs[0].data() };
+        const route = currentTripSheetForFit.route;
+        const jobListContainer = document.getElementById('fitInSheetJobList');
+        jobListContainer.innerHTML = ''; // Clear previous content
+
+        // Render the "Fit here" button for the first position
+        jobListContainer.innerHTML += `
+            <button class="fit-job-btn w-full text-center p-2 border-2 border-dashed border-green-400 rounded-lg text-green-600 hover:bg-green-50" data-index="0">
+                Fit Job Here (Start of Day)
+            </button>
+        `;
+
+        route.forEach((job, index) => {
+            jobListContainer.innerHTML += `
+                <div class="p-3 bg-slate-100 border border-slate-200 rounded-lg text-sm">
+                    <p class="font-bold">${job.customer}</p>
+                    <p>${job.address}</p>
+                    <p class="text-xs text-slate-500">${job.timeSlot} - ${job.issue}</p>
+                </div>
+            `;
+            jobListContainer.innerHTML += `
+                <button class="fit-job-btn w-full text-center p-2 border-2 border-dashed border-green-400 rounded-lg text-green-600 hover:bg-green-50" data-index="${index + 1}">
+                    Fit Job Here
+                </button>
+            `;
+        });
+
+        // Add event listeners to the new buttons
+        document.querySelectorAll('.fit-job-btn').forEach(btn => {
+            btn.addEventListener('click', handleFitJobClick);
+        });
+
+        // Show the modal
+        const modal = document.getElementById('fitInSheetModal');
+        modal.style.display = 'block';
+        document.getElementById('confirmFitInSheet').classList.add('hidden'); // Hide confirm button initially
+
+    } catch (error) {
+        console.error("Error opening fit in sheet modal:", error);
+        showMessage('Error fetching trip sheet data.', 'error');
+    }
+}
+
+function handleFitJobClick(event) {
+    const targetButton = event.currentTarget;
+    selectedFitIndex = parseInt(targetButton.dataset.index);
+
+    // Disable all fit buttons
+    document.querySelectorAll('.fit-job-btn').forEach(btn => {
+        btn.disabled = true;
+        btn.classList.add('bg-slate-200', 'cursor-not-allowed', 'border-slate-300');
+        btn.classList.remove('hover:bg-green-50');
+    });
+
+    // Visually show the job being placed
+    const jobInfoHtml = `
+        <div class="p-3 bg-blue-100 border border-blue-300 rounded-lg text-sm ring-2 ring-blue-500">
+            <p class="font-bold">${currentJobToReschedule.customer}</p>
+            <p>${currentJobToReschedule.address}</p>
+            <p class="text-xs text-blue-600">This job will be placed here.</p>
+        </div>
+    `;
+    targetButton.insertAdjacentHTML('afterend', jobInfoHtml);
+    targetButton.classList.add('hidden'); // Hide the clicked button
+
+    // Show the confirm button
+    document.getElementById('confirmFitInSheet').classList.remove('hidden');
+}
+
+async function handleConfirmFitInSheet() {
+    if (selectedFitIndex === -1 || !currentTripSheetForFit || !currentJobToReschedule) {
+        showMessage('An error occurred. Please close the modal and try again.', 'error');
+        return;
+    }
+
+    const confirmBtn = document.getElementById('confirmFitInSheet');
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = 'Confirming...';
+
+    try {
+        // Prepare the updated job data
+        const newScheduledDate = document.getElementById('modalJobDate').value;
+        const newTimeSlot = document.getElementById('modalJobTimeSlot').value;
+
+        const jobToInsert = {
+            id: currentJobToReschedule.id,
+            customer: currentJobToReschedule.customer,
+            address: currentJobToReschedule.address,
+            issue: currentJobToReschedule.issue,
+            timeSlot: newTimeSlot
+        };
+
+        // Create the new route
+        const newRoute = [...currentTripSheetForFit.route];
+        newRoute.splice(selectedFitIndex, 0, jobToInsert);
+
+        // Update trip sheet in Firestore
+        const tripSheetRef = db.collection('tripSheets').doc(currentTripSheetForFit.id);
+        await tripSheetRef.update({ route: newRoute });
+
+        // Update the job document in Firestore
+        const jobRef = db.collection('jobs').doc(currentJobToReschedule.id);
+        await jobRef.update({
+            scheduledDate: newScheduledDate,
+            timeSlot: newTimeSlot
+        });
+
+        showMessage('Job successfully fitted into trip sheet!', 'success');
+        closeFitInSheetModal();
+        closeScheduleJobModal();
+
+    } catch (error) {
+        console.error("Error confirming fit in sheet:", error);
+        showMessage('Failed to update the trip sheet. Please try again.', 'error');
+    } finally {
+        confirmBtn.disabled = false;
+        confirmBtn.textContent = 'Confirm Placement';
+    }
 }
 
 
