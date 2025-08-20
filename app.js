@@ -43,9 +43,6 @@ let currentProvider = null;
 let currentFilteredData = [];
 let currentJobToReschedule = null;
 let currentWorkerTechnicianId = null;
-let currentJobToFit = null;
-let currentTripSheetToModify = null;
-let newJobPosition = -1;
 
 
 // --- DOM Elements ---
@@ -130,13 +127,6 @@ const workerNameEl = document.getElementById('workerName');
 const workerCurrentDateEl = document.getElementById('workerCurrentDate');
 const workerTodaysRouteEl = document.getElementById('workerTodaysRoute');
 const workerLogoutBtn = document.getElementById('workerLogoutBtn');
-
-const fitIntoTripSheetModal = document.getElementById('fitIntoTripSheetModal');
-const fitIntoTripSheetContainer = document.getElementById('fitIntoTripSheetContainer');
-const closeFitIntoTripSheetModalBtn = document.getElementById('closeFitIntoTripSheetModal');
-const fitIntoTripSheetFooter = document.getElementById('fitIntoTripSheetFooter');
-const confirmFitInBtn = document.getElementById('confirmFitInBtn');
-const cancelFitInBtn = document.getElementById('cancelFitInBtn');
 
 // --- Invoice Form Elements ---
 const invoiceFormScreen = document.getElementById('invoiceFormScreen');
@@ -1337,64 +1327,6 @@ async function handleRescheduleConfirm() {
     }
 }
 
-function renderFitIntoTripSheetView(tripSheet, jobToInsert) {
-    if (!fitIntoTripSheetContainer) return;
-
-    const route = tripSheet ? tripSheet.route : [];
-    let html = '';
-
-    const createJobHtml = (job) => {
-        const isCompleted = job.status === 'Completed';
-        const opacityClass = isCompleted ? 'opacity-60' : '';
-        const statusPill = isCompleted ? `<span class="status-pill status-completed">Completed</span>` : `<span class="status-pill status-awaiting-completion">${job.timeSlot || "Anytime"}</span>`;
-        return `
-            <div class="flex items-center gap-4 bg-slate-50 px-4 min-h-[72px] py-3 justify-between border border-slate-200 rounded-lg ${opacityClass}">
-                <div class="flex items-center gap-4 overflow-hidden">
-                    <div class="text-slate-400 flex items-center justify-center rounded-lg bg-slate-200 shrink-0 size-12">
-                        <span class="material-icons-outlined text-3xl">${isCompleted ? 'check_circle' : 'pending'}</span>
-                    </div>
-                    <div class="flex flex-col justify-center overflow-hidden">
-                        <p class="text-slate-600 text-base font-medium leading-normal truncate ${isCompleted ? 'line-through' : ''}">${job.customer || 'N/A'}</p>
-                        <p class="text-slate-500 text-sm font-normal leading-normal truncate">${job.address}</p>
-                    </div>
-                </div>
-                <div class="shrink-0">${statusPill}</div>
-            </div>
-        `;
-    };
-
-    const createPlaceHereButton = (position) => {
-        return `
-            <div class="my-2 text-center">
-                <button class="btn-secondary-stitch place-job-btn" data-position="${position}">
-                    <span class="material-icons-outlined text-lg vm">add_circle_outline</span>
-                    Place job here
-                </button>
-            </div>
-        `;
-    };
-
-    html += createPlaceHereButton(0);
-
-    route.forEach((job, index) => {
-        html += createJobHtml(job);
-        html += createPlaceHereButton(index + 1);
-    });
-
-    fitIntoTripSheetContainer.innerHTML = html;
-
-    fitIntoTripSheetContainer.querySelectorAll('.place-job-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            // Remove active state from all other buttons
-            fitIntoTripSheetContainer.querySelectorAll('.place-job-btn').forEach(b => b.classList.remove('active', 'btn-primary-stitch'));
-            // Add active state to the clicked button
-            e.currentTarget.classList.add('active', 'btn-primary-stitch');
-            newJobPosition = parseInt(e.currentTarget.dataset.position, 10);
-            fitIntoTripSheetFooter.style.display = 'flex';
-        });
-    });
-}
-
 function openEditTechModal(tech = null) {
     const modalTitle = document.getElementById('modalTechTitle');
     const techIdInput = document.getElementById('modalTechId');
@@ -1513,20 +1445,6 @@ function openScheduleJobModal(job) {
     } else {
         if (assignedToContainer) assignedToContainer.classList.add('hidden');
     }
-
-    const updateButtonState = () => {
-        const selectedDate = dateInput.value;
-        if (job.status === 'Awaiting completion' && selectedDate === job.scheduledDate) {
-            confirmBtn.textContent = 'Fit into trip sheet';
-        } else if (job.status && (job.status.startsWith('Scheduled') || job.status === 'Awaiting completion')) {
-            confirmBtn.textContent = 'Confirm Reschedule';
-        } else {
-            confirmBtn.textContent = 'Confirm Schedule';
-        }
-    };
-
-    dateInput.addEventListener('input', updateButtonState);
-    updateButtonState(); 
 
     scheduleJobModal.style.display = 'block';
 }
@@ -2242,17 +2160,6 @@ if(saveInvoiceBtn) {
     if(cancelAddPartButton) cancelAddPartButton.addEventListener('click', closeAddPartModal);
     if(closeLogPartUsageModalButton) closeLogPartUsageModalButton.addEventListener('click', closeLogPartUsageModal);
     if(cancelLogPartUsageButton) cancelLogPartUsageButton.addEventListener('click', closeLogPartUsageModal);
-
-    if(closeFitIntoTripSheetModalBtn) closeFitIntoTripSheetModalBtn.addEventListener('click', () => {
-        fitIntoTripSheetModal.style.display = 'none';
-    });
-    if(cancelFitInBtn) cancelFitInBtn.addEventListener('click', () => {
-        fitIntoTripSheetModal.style.display = 'none';
-    });
-
-    if(confirmFitInBtn) confirmFitInBtn.addEventListener('click', () => {
-        handleFitInConfirm();
-    });
     
     const rescheduleModal = document.getElementById('rescheduleModal');
     if (rescheduleModal) {
@@ -2382,121 +2289,21 @@ if(saveInvoiceBtn) {
         }
     });
 
-    async function openFitIntoTripSheetView(job) {
-        console.log("Opening 'Fit into trip sheet' view for job:", job.id);
-        currentJobToFit = job;
-        
-        closeScheduleJobModal();
-
-        // Reset previous state
-        fitIntoTripSheetContainer.innerHTML = '<p class="text-center text-slate-500 p-4">Loading trip sheet...</p>';
-        fitIntoTripSheetFooter.style.display = 'none';
-        newJobPosition = -1;
-        
-        fitIntoTripSheetModal.style.display = 'block';
-
-        try {
-            const tripSheetQuery = firebase.firestore().collection("tripSheets")
-                .where("technicianId", "==", job.assignedTechnicianId)
-                .where("date", "==", job.scheduledDate)
-                .limit(1);
-
-            const snapshot = await tripSheetQuery.get();
-
-            if (snapshot.empty) {
-                console.log("No trip sheet found. Creating empty view.");
-                currentTripSheetToModify = null;
-                renderFitIntoTripSheetView(null, job);
-            } else {
-                const tripSheetDoc = snapshot.docs[0];
-                currentTripSheetToModify = { id: tripSheetDoc.id, ...tripSheetDoc.data() };
-                renderFitIntoTripSheetView(currentTripSheetToModify, job);
-            }
-        } catch (error) {
-            console.error("Error fetching trip sheet:", error);
-            fitIntoTripSheetContainer.innerHTML = '<p class="text-center text-red-500 p-4">Error loading trip sheet. Please try again.</p>';
-        }
-    }
-
-    async function handleFitInConfirm() {
-        if (!currentJobToFit || newJobPosition === -1) {
-            showMessage("Could not place job. Please select a position.", "error");
-            return;
-        }
-
-        confirmFitInBtn.disabled = true;
-        confirmFitInBtn.textContent = 'Saving...';
-
-        try {
-            const newRoute = currentTripSheetToModify ? [...currentTripSheetToModify.route] : [];
-            
-            // Create a simplified job object to insert into the route
-            const jobForRoute = {
-                id: currentJobToFit.id,
-                address: currentJobToFit.address,
-                customer: currentJobToFit.customer,
-                issue: currentJobToFit.issue,
-                timeSlot: currentJobToFit.timeSlot,
-                status: 'Awaiting completion' // Ensure status is correct
-            };
-
-            newRoute.splice(newJobPosition, 0, jobForRoute);
-
-            if (currentTripSheetToModify) {
-                // Update existing trip sheet
-                const tripSheetRef = firebase.firestore().doc(`tripSheets/${currentTripSheetToModify.id}`);
-                await tripSheetRef.update({ route: newRoute });
-            } else {
-                // Create new trip sheet
-                const newTripSheet = {
-                    date: currentJobToFit.scheduledDate,
-                    technicianId: currentJobToFit.assignedTechnicianId,
-                    technicianName: currentJobToFit.assignedTechnicianName,
-                    route: newRoute,
-                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
-                };
-                await firebase.firestore().collection('tripSheets').add(newTripSheet);
-            }
-
-            showMessage("Job successfully placed in trip sheet!", "success");
-            fitIntoTripSheetModal.style.display = 'none';
-
-        } catch (error) {
-            console.error("Error saving trip sheet:", error);
-            showMessage("Failed to save trip sheet. Please try again.", "error");
-        } finally {
-            confirmFitInBtn.disabled = false;
-            confirmFitInBtn.textContent = 'Confirm Placement';
-        }
-    }
-
     if(scheduleJobForm) scheduleJobForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const confirmBtn = e.target.querySelector('button[type="submit"]');
         const jobId = document.getElementById('modalScheduleJobId').value;
-
-        if (confirmBtn && confirmBtn.textContent === 'Fit into trip sheet') {
-            const job = allJobsData.find(j => j.id === jobId);
-            if (job) {
-                openFitIntoTripSheetView(job);
-            } else {
-                console.error("Could not find job data for ID:", jobId);
-                showMessage("An error occurred: could not find job data.", "error");
-            }
-        } else {
-            const jobRef = firebase.firestore().doc(`jobs/${jobId}`);
-            const updatedData = {
-                status: 'Scheduled',
-                scheduledDate: document.getElementById('modalJobDate').value,
-                timeSlot: document.getElementById('modalJobTimeSlot').value,
-                rescheduleReason: firebase.firestore.FieldValue.delete()
-            };
-            try {
-                await jobRef.update(updatedData);
-                closeScheduleJobModal();
-            } catch (error) {
-                console.error("Error scheduling job:", error);
-            }
+        const jobRef = firebase.firestore().doc(`jobs/${jobId}`);
+        const updatedData = {
+            status: 'Scheduled',
+            scheduledDate: document.getElementById('modalJobDate').value,
+            timeSlot: document.getElementById('modalJobTimeSlot').value,
+            rescheduleReason: firebase.firestore.FieldValue.delete()
+        };
+        try {
+            await jobRef.update(updatedData);
+            closeScheduleJobModal();
+        } catch (error) {
+            console.error("Error scheduling job:", error);
         }
     });
     
