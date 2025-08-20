@@ -1398,7 +1398,12 @@ function openScheduleJobModal(job) {
     if (linkContainer && linkInput && copyBtn) {
         const schedulingUrl = `${window.location.origin}/scheduling.html?jobId=${job.id}`;
         linkInput.value = schedulingUrl;
-        linkContainer.classList.remove('hidden');
+        
+        if (job.status && job.status.startsWith('Scheduled')) {
+            linkContainer.classList.add('hidden');
+        } else {
+            linkContainer.classList.remove('hidden');
+        }
 
         copyBtn.onclick = () => {
             linkInput.select();
@@ -1419,6 +1424,15 @@ function openScheduleJobModal(job) {
             sendManualLinkBtn.style.visibility = 'visible';
         } else {
             sendManualLinkBtn.style.visibility = 'hidden';
+        }
+    }
+
+    const confirmBtn = scheduleJobForm.querySelector('button[type="submit"]');
+    if (confirmBtn) {
+        if (job.status && job.status.startsWith('Scheduled')) {
+            confirmBtn.textContent = 'Confirm Reschedule';
+        } else {
+            confirmBtn.textContent = 'Confirm Schedule';
         }
     }
 
