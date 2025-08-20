@@ -1412,6 +1412,16 @@ function openScheduleJobModal(job) {
     }
     // --- End New Link Logic ---
 
+    const sendManualLinkBtn = document.getElementById('sendManualLinkBtn');
+    if (sendManualLinkBtn) {
+        const status = job.status || 'Needs Scheduling';
+        if (status === 'Needs Scheduling' || status.startsWith('Rescheduled by')) {
+            sendManualLinkBtn.style.visibility = 'visible';
+        } else {
+            sendManualLinkBtn.style.visibility = 'hidden';
+        }
+    }
+
     scheduleJobModal.style.display = 'block';
 }
 
