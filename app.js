@@ -1392,22 +1392,48 @@ async function openScheduleJobModal(job) {
     timeSlotSelect.value = job.timeSlot || "";
 
     const confirmBtn = document.getElementById('confirmScheduleBtn');
+    const scheduleWarningMessage = document.getElementById('scheduleWarningMessage');
 
-    // --- "Fit into trip sheet" logic ---
     const updateScheduleButton = async () => {
+        const selectedDate = dateInput.value;
+        const selectedTimeSlot = timeSlotSelect.value;
+
+        // Reset button and message state
+        confirmBtn.disabled = false;
+        if (scheduleWarningMessage) {
+            scheduleWarningMessage.textContent = '';
+            scheduleWarningMessage.classList.add('hidden');
+        }
+
         if (job.status === 'Awaiting completion' && job.assignedTechnicianId) {
-            const selectedDate = dateInput.value;
+            // This is a job on a trip sheet, so we are considering a reschedule.
+            if (job.scheduledDate === selectedDate && job.timeSlot === selectedTimeSlot) {
+                confirmBtn.textContent = 'Fit into trip sheet';
+                confirmBtn.disabled = true;
+                if (scheduleWarningMessage) {
+                    scheduleWarningMessage.textContent = "Job is already on that time slot and date";
+                    scheduleWarningMessage.classList.remove('hidden');
+                }
+                return;
+            }
+
+            // Check if a trip sheet exists for the *new* selected date.
             const tripSheetQuery = db.collection("tripSheets")
                 .where("date", "==", selectedDate)
                 .where("technicianId", "==", job.assignedTechnicianId);
             
-            const snapshot = await tripSheetQuery.get();
-            
-            if (!snapshot.empty) {
-                confirmBtn.textContent = 'Fit into trip sheet';
-            } else {
-                confirmBtn.textContent = 'Confirm Reschedule';
+            try {
+                const snapshot = await tripSheetQuery.get();
+                if (!snapshot.empty) {
+                    confirmBtn.textContent = 'Fit into trip sheet';
+                } else {
+                    confirmBtn.textContent = 'Confirm Reschedule';
+                }
+            } catch (error) {
+                console.error("Error checking for trip sheets:", error);
+                confirmBtn.textContent = 'Confirm Reschedule'; // Default on error
             }
+
         } else if (job.status && job.status.startsWith('Scheduled')) {
             confirmBtn.textContent = 'Confirm Reschedule';
         } else {
@@ -1415,10 +1441,11 @@ async function openScheduleJobModal(job) {
         }
     };
 
-    dateInput.removeEventListener('change', updateScheduleButton); // Remove old listener
-    dateInput.addEventListener('change', updateScheduleButton);   // Add new one
-    
-    // --- End "Fit into trip sheet" logic ---
+    // Remove old listeners to be safe, then add them.
+    dateInput.removeEventListener('change', updateScheduleButton);
+    timeSlotSelect.removeEventListener('change', updateScheduleButton);
+    dateInput.addEventListener('change', updateScheduleButton);
+    timeSlotSelect.addEventListener('change', updateScheduleButton);
 
     const linkContainer = document.getElementById('scheduleModalLinkContainer');
     const linkInput = document.getElementById('scheduleModalLinkInput');
