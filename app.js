@@ -42,6 +42,7 @@ let allInvoicesData = [];
 let currentProvider = null;
 let currentFilteredData = [];
 let currentJobToReschedule = null;
+let currentWorkerTechnicianId = null;
 
 
 // --- DOM Elements ---
@@ -1040,11 +1041,20 @@ function renderWorkerPwaView(jobs, technicianName) {
     });
 
     if (jobs.length === 0) {
+        const todaysRouteHeading = document.getElementById('todaysRouteHeading');
+        const headingText = todaysRouteHeading ? todaysRouteHeading.textContent.toLowerCase() : "the selected day";
+        let dayText = "today";
+        if (headingText.includes('yesterday')) {
+            dayText = "yesterday";
+        } else if (headingText.includes('tomorrow')) {
+            dayText = "tomorrow";
+        }
+
         workerTodaysRouteEl.innerHTML = `
             <div class="text-center p-8 text-slate-500">
                 <span class="material-icons-outlined text-6xl">task_alt</span>
                 <h3 class="text-xl font-bold mt-4">All Clear!</h3>
-                <p>You have no jobs assigned for today.</p>
+                <p>You have no jobs assigned for ${dayText}.</p>
             </div>
         `;
         return;
@@ -1534,6 +1544,58 @@ function listenForDashboardData() {
     });
 }
 
+async function fetchAndRenderJobsForDate(date, technicianId, technicianName) {
+    const todaysRouteHeading = document.getElementById('todaysRouteHeading');
+    if (workerJobsListener) {
+        workerJobsListener(); // Detach any previous real-time listener
+        workerJobsListener = null;
+    }
+
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const dateString = `${year}-${month}-${day}`;
+
+    // Update heading text
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const dateCopy = new Date(date);
+    dateCopy.setHours(0,0,0,0);
+
+    if (dateCopy.getTime() === today.getTime()) {
+        todaysRouteHeading.textContent = "Today's Route";
+    } else {
+        const yesterday = new Date(today);
+        yesterday.setDate(today.getDate() - 1);
+        const tomorrow = new Date(today);
+        tomorrow.setDate(today.getDate() + 1);
+        if (dateCopy.getTime() === yesterday.getTime()) {
+            todaysRouteHeading.textContent = "Yesterday's Route";
+        } else if (dateCopy.getTime() === tomorrow.getTime()) {
+            todaysRouteHeading.textContent = "Tomorrow's Route";
+        } else {
+            todaysRouteHeading.textContent = `Route for ${date.toLocaleDateString()}`;
+        }
+    }
+
+    try {
+        const jobsQuery = firebase.firestore().collection("jobs")
+            .where("assignedTechnicianId", "==", technicianId)
+            .where("scheduledDate", "==", dateString);
+        
+        const snapshot = await jobsQuery.get();
+        const assignedJobs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        
+        renderWorkerPwaView(assignedJobs, technicianName);
+
+    } catch (error) {
+        console.error(`Error fetching jobs for date ${dateString}:`, error);
+        if (workerTodaysRouteEl) {
+            workerTodaysRouteEl.innerHTML = `<div class="text-center p-8 text-red-500"><p>Error loading jobs for the selected date.</p></div>`;
+        }
+    }
+}
+
 function listenForWorkerJobs(technicianId, technicianName) {
     if (workerJobsListener) {
         workerJobsListener(); // Detach any previous listener
@@ -1544,13 +1606,16 @@ function listenForWorkerJobs(technicianId, technicianName) {
     const day = String(today.getDate()).padStart(2, '0');
     const todayDateString = `${year}-${month}-${day}`;
 
+    const todaysRouteHeading = document.getElementById('todaysRouteHeading');
+    if(todaysRouteHeading) todaysRouteHeading.textContent = "Today's Route";
+
     const jobsQuery = firebase.firestore().collection("jobs")
         .where("assignedTechnicianId", "==", technicianId)
         .where("scheduledDate", "==", todayDateString);
 
     workerJobsListener = jobsQuery.onSnapshot((snapshot) => {
         const assignedJobs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        allJobsData = assignedJobs;
+        currentWorkerAssignedJobs = assignedJobs;
         renderWorkerPwaView(assignedJobs, technicianName);
     }, (error) => {
         console.error(`Error listening for jobs for technician ${technicianId}:`, error);
@@ -2821,6 +2886,45 @@ async function sendAllToOffice(jobId, customerInvoice, warrantyInvoice) {
   return res.json(); // { message, bucket, succeeded, failed }
 }
 
+    // --- Route Dropdown Logic ---
+    const routeDropdownButton = document.getElementById('routeDropdownButton');
+    const routeDropdownMenu = document.getElementById('routeDropdownMenu');
+    const routeOptions = document.querySelectorAll('.route-option');
+
+    if (routeDropdownButton && routeDropdownMenu && routeOptions.length > 0) {
+        routeDropdownButton.addEventListener('click', () => {
+            routeDropdownMenu.classList.toggle('hidden');
+        });
+
+        routeOptions.forEach(option => {
+            option.addEventListener('click', (e) => {
+                e.preventDefault();
+                const day = e.target.dataset.day;
+                routeDropdownMenu.classList.add('hidden');
+
+                if (day === 'today') {
+                    listenForWorkerJobs(currentWorkerTechnicianId, currentWorkerTechnicianName);
+                } else {
+                    const date = new Date();
+                    if (day === 'yesterday') {
+                        date.setDate(date.getDate() - 1);
+                    } else if (day === 'tomorrow') {
+                        date.setDate(date.getDate() + 1);
+                    }
+                    fetchAndRenderJobsForDate(date, currentWorkerTechnicianId, currentWorkerTechnicianName);
+                }
+            });
+        });
+
+        // Close dropdown if clicking outside
+        document.addEventListener('click', (event) => {
+            if (routeDropdownButton && !routeDropdownButton.contains(event.target) && routeDropdownMenu && !routeDropdownMenu.contains(event.target)) {
+                routeDropdownMenu.classList.add('hidden');
+            }
+        });
+    }
+
+
     // Login Form
     const loginForm = document.getElementById('loginForm');
     const loginEmailInput = document.getElementById('loginEmail');
@@ -2982,6 +3086,9 @@ if (sendAllInvoicesBtn) {
                         const technician = { id: techQuery.docs[0].id, ...techQuery.docs[0].data() };
                         console.log(`Found technician profile: ${technician.name}`);
                         
+                        currentWorkerTechnicianId = technician.id;
+                        currentWorkerTechnicianName = technician.name;
+
                         loginScreen.style.display = 'none';
                         layoutContainer.style.display = 'none';
                         workerPwaView.classList.remove('hidden');
