@@ -1033,6 +1033,9 @@
                         <p><strong>Reschedule Reason:</strong></p>
                         <p id="modalScheduleRescheduleReason" class="mt-1 font-bold"></p>
                     </div>
+                    <div id="modalScheduleAssignedToContainer" class="hidden text-sm p-3 mb-3 bg-blue-50 border border-blue-200 rounded-lg">
+                        <p class="text-blue-800"><strong>Assigned to:</strong> <span id="modalScheduleAssignedTo" class="font-bold"></span></p>
+                    </div>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2 text-sm">
                         <p><strong>Customer:</strong> <span id="modalScheduleCustomer"></span></p>
                         <p><strong>Address:</strong> <span id="modalScheduleAddress"></span></p>
@@ -1083,10 +1086,30 @@
                     </div>
                     <div class="flex space-x-4">
                         <button type="button" id="cancelScheduleJob" class="btn-secondary-stitch bg-white text-slate-700 border-slate-300 hover:bg-slate-100 px-5 py-2">Cancel</button>
-                        <button type="submit" class="btn-primary-stitch px-5 py-2">Confirm Schedule</button>
+                        <button type="submit" id="confirmScheduleBtn" class="btn-primary-stitch px-5 py-2">Confirm Schedule</button>
                     </div>
                 </div>
             </form>
+        </div>
+    </div>
+    
+    <!-- "Fit into Trip Sheet" Modal -->
+    <div id="fitInSheetModal" class="modal" style="display: none;">
+        <div class="modal-content !max-w-2xl">
+            <div class="modal-header">
+                <h2 class="modal-title">Fit Job into Trip Sheet</h2>
+                <span class="close-button" id="closeFitInSheetModal">&times;</span>
+            </div>
+            <div class="modal-body" id="fitInSheetModalBody">
+                <p class="text-sm text-slate-600 mb-4">The selected date already has a trip sheet. Choose a position below to fit this job into the existing route.</p>
+                <div id="fitInSheetJobList" class="space-y-2">
+                    <!-- Job list will be dynamically populated here -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button id="cancelFitInSheet" type="button" class="btn-secondary-stitch">Cancel</button>
+                <button id="confirmFitInSheet" type="button" class="btn-primary-stitch hidden">Confirm Placement</button>
+            </div>
         </div>
     </div>
 
