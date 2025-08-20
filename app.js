@@ -2184,34 +2184,39 @@ if(saveInvoiceBtn) {
             const originalBtnHtml = sendManualLinkBtn.innerHTML;
             sendManualLinkBtn.disabled = true;
             sendManualLinkBtn.innerHTML = `<span class="material-icons-outlined text-lg animate-spin">sync</span> Sending...`;
-            if (statusSpan) statusSpan.textContent = ''; // Clear previous status
+            if (statusSpan) statusSpan.textContent = '';
 
             try {
                 const response = await fetch(SEND_SCHEDULING_LINKS_URL, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ jobId: jobId })
                 });
 
                 const result = await response.json();
 
-                if (!response.ok) {
-                    throw new Error(result.message || `Server responded with ${response.status}`);
+                if (!response.ok || !result.success) {
+                    throw new Error(result.message || `Server responded with status ${response.status}`);
                 }
-                
+
+                // Definite success
+                showMessage(result.message, 'success');
                 if (statusSpan) {
                     statusSpan.textContent = 'Link sent successfully!';
-                    // The success message will fade after a few seconds
-                    setTimeout(() => {
-                        statusSpan.textContent = '';
-                    }, 5000);
+                    statusSpan.classList.remove('text-red-600');
+                    statusSpan.classList.add('text-green-600');
+                    setTimeout(() => { statusSpan.textContent = ''; }, 5000);
                 }
 
             } catch (error) {
                 console.error('Error sending manual scheduling link:', error);
-                showMessage(`Error: ${error.message}`, 'error');
+                showMessage(error.message, 'error');
+                if (statusSpan) {
+                    statusSpan.textContent = 'Failed to send!';
+                    statusSpan.classList.remove('text-green-600');
+                    statusSpan.classList.add('text-red-600');
+                    setTimeout(() => { statusSpan.textContent = ''; }, 5000);
+                }
             } finally {
                 sendManualLinkBtn.disabled = false;
                 sendManualLinkBtn.innerHTML = originalBtnHtml;
