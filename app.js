@@ -2154,7 +2154,7 @@ if(saveInvoiceBtn) {
         sendSchedulingLinksBtn.innerHTML = `<span class="material-icons-outlined text-lg animate-spin">sync</span> Sending...`;
         
         try {
-            const response = await fetch(SEND_SCHEDULING_LINKS_URL);
+            const response = await fetch(SEND_SCHEDULING_LINKS_URL, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({}) });
             if (!response.ok) {
                 const errorText = await response.text();
                 throw new Error(`Server responded with ${response.status}: ${errorText}`);
@@ -2169,6 +2169,55 @@ if(saveInvoiceBtn) {
             sendSchedulingLinksBtn.innerHTML = `<span class="material-icons-outlined text-lg">send</span>Send Scheduling Links`;
         }
     });
+
+    const sendManualLinkBtn = document.getElementById('sendManualLinkBtn');
+    if (sendManualLinkBtn) {
+        sendManualLinkBtn.addEventListener('click', async () => {
+            const jobId = document.getElementById('modalScheduleJobId').value;
+            const statusSpan = document.getElementById('manualLinkStatus');
+
+            if (!jobId) {
+                showMessage('Cannot send link: Job ID is missing.', 'error');
+                return;
+            }
+
+            const originalBtnHtml = sendManualLinkBtn.innerHTML;
+            sendManualLinkBtn.disabled = true;
+            sendManualLinkBtn.innerHTML = `<span class="material-icons-outlined text-lg animate-spin">sync</span> Sending...`;
+            if (statusSpan) statusSpan.textContent = ''; // Clear previous status
+
+            try {
+                const response = await fetch(SEND_SCHEDULING_LINKS_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ jobId: jobId })
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.message || `Server responded with ${response.status}`);
+                }
+                
+                if (statusSpan) {
+                    statusSpan.textContent = 'Link sent successfully!';
+                    // The success message will fade after a few seconds
+                    setTimeout(() => {
+                        statusSpan.textContent = '';
+                    }, 5000);
+                }
+
+            } catch (error) {
+                console.error('Error sending manual scheduling link:', error);
+                showMessage(`Error: ${error.message}`, 'error');
+            } finally {
+                sendManualLinkBtn.disabled = false;
+                sendManualLinkBtn.innerHTML = originalBtnHtml;
+            }
+        });
+    }
     if(openAddPartModalButton) openAddPartModalButton.addEventListener('click', () => openAddPartModal());
     if(openLogPartUsageButton) openLogPartUsageButton.addEventListener('click', openLogPartUsageModal);
 
