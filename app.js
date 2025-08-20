@@ -1405,7 +1405,9 @@ async function openScheduleJobModal(job) {
             scheduleWarningMessage.classList.add('hidden');
         }
 
-        if (job.status === 'Awaiting completion' && job.assignedTechnicianId) {
+        const status = job.status || 'Needs Scheduling'; // Normalize status
+
+        if (status === 'Awaiting completion' && job.assignedTechnicianId) {
             // This is a job on a trip sheet, so we are considering a reschedule.
             if (job.scheduledDate === selectedDate && job.timeSlot === selectedTimeSlot) {
                 confirmBtn.textContent = 'Fit into trip sheet';
@@ -1434,10 +1436,14 @@ async function openScheduleJobModal(job) {
                 confirmBtn.textContent = 'Confirm Reschedule'; // Default on error
             }
 
-        } else if (job.status && job.status.startsWith('Scheduled')) {
+        } else if (status.startsWith('Scheduled') || status.startsWith('Rescheduled by') || status === 'Awaiting completion') {
             confirmBtn.textContent = 'Confirm Reschedule';
-        } else {
+        } else if (status === 'Needs Scheduling' || status === 'Link Sent!') {
             confirmBtn.textContent = 'Confirm Schedule';
+        } else {
+            // Fallback for 'Completed' or other unexpected statuses
+            confirmBtn.textContent = 'View Only';
+            confirmBtn.disabled = true;
         }
     };
 
