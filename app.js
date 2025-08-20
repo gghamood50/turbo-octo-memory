@@ -1485,20 +1485,12 @@ async function openScheduleJobModal(job) {
     const assignedToContainer = document.getElementById('modalScheduleAssignedToContainer');
     const assignedToEl = document.getElementById('modalScheduleAssignedTo');
 
-    // Per user clarification, the technician's name should not be shown in this modal.
-    // The original request was to show it, but the latest feedback contradicts this.
-    // Hiding this block to follow the latest instruction.
-    if (assignedToContainer) {
-        assignedToContainer.classList.add('hidden');
-    }
-    /*
-    if (job.status === 'Awaiting completion' && job.assignedTechnicianName) {
+    if ((job.status === 'Awaiting completion' || job.status === 'Completed') && job.assignedTechnicianName) {
         if (assignedToEl) assignedToEl.textContent = job.assignedTechnicianName;
         if (assignedToContainer) assignedToContainer.classList.remove('hidden');
     } else {
         if (assignedToContainer) assignedToContainer.classList.add('hidden');
     }
-    */
 
     scheduleJobModal.style.display = 'block';
     await updateScheduleButton(); // Set initial button state
