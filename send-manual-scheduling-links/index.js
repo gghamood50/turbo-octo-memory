@@ -15,67 +15,94 @@ const TWILIO_TOKEN_SECRET_NAME = 'projects/216681158749/secrets/twilio-auth-toke
 const TWILIO_PHONE_SECRET_NAME = 'projects/216681158749/secrets/twilio-phone-number/versions/latest';
 
 exports['send-manual-scheduling-links'] = onRequest({ cors: true }, async (req, res) => {
-    // Add this log to see the request body for debugging
-    console.log("--- DEBUGGING: 'send-manual-scheduling-links' function triggered. Body: ", req.body);
+    console.log("--- 'send-manual-scheduling-links' function triggered. Body: ", req.body);
 
-    try {
-        const { jobId } = req.body; // Destructure jobId from the request body
-        let jobsSnapshot;
+    const { jobId } = req.body;
 
-        if (jobId) {
-            // If a specific jobId is provided, fetch only that job
-            console.log(`DEBUGGING: Processing single job with ID: ${jobId}`);
+    // --- Single Job Logic ---
+    if (jobId) {
+        try {
+            console.log(`Processing single job with ID: ${jobId}`);
             const jobDoc = await firestore.collection('jobs').doc(jobId).get();
             if (!jobDoc.exists) {
-                console.error(`DEBUGGING: Job with ID ${jobId} not found.`);
-                res.status(404).send({ message: "Job not found." });
-                return;
+                console.error(`Job with ID ${jobId} not found.`);
+                return res.status(404).send({ success: false, message: "Job not found." });
             }
-            // Create a snapshot-like object to maintain a consistent structure
-            jobsSnapshot = {
-                empty: false,
-                size: 1,
-                docs: [jobDoc],
-                forEach: (callback) => [jobDoc].forEach(callback)
-            };
-        } else {
-            // If no jobId is provided, fetch all jobs needing scheduling (original behavior)
-            console.log("DEBUGGING: No specific jobId provided. Fetching all jobs with 'Needs Scheduling' status.");
-            const jobsToProcessQuery = firestore.collection('jobs').where('status', '==', 'Needs Scheduling');
-            jobsSnapshot = await jobsToProcessQuery.get();
+
+            const jobData = jobDoc.data();
+            if (!jobData.phone) {
+                console.error(`Job ${jobId} has no phone number.`);
+                return res.status(400).send({ success: false, message: "This job does not have a phone number." });
+            }
+
+            // Securely fetch Twilio credentials
+            const [sidVersion] = await secretManagerClient.accessSecretVersion({ name: TWILIO_SID_SECRET_NAME });
+            const [tokenVersion] = await secretManagerClient.accessSecretVersion({ name: TWILIO_TOKEN_SECRET_NAME });
+            const [phoneVersion] = await secretManagerClient.accessSecretVersion({ name: TWILIO_PHONE_SECRET_NAME });
+
+            const accountSid = sidVersion.payload.data.toString('utf8');
+            const authToken = tokenVersion.payload.data.toString('utf8');
+            const twilioPhoneNumber = phoneVersion.payload.data.toString('utf8');
+            const twilioClient = twilio(accountSid, authToken);
+
+            const schedulingUrl = `https://safewayos2.firebaseapp.com/scheduling.html?jobId=${jobId}`;
+            const messageBody = `Hello ${jobData.customer || 'Valued Customer'}, this is Safeway Garage Solutions. Please use this link to schedule your service appointment: ${schedulingUrl}`;
+
+            const message = await twilioClient.messages.create({
+                body: messageBody,
+                from: twilioPhoneNumber,
+                to: jobData.phone
+            });
+            
+            console.log(`Twilio reported SUCCESS for job ${jobId}. Message SID: ${message.sid}`);
+            
+            const jobRef = firestore.collection('jobs').doc(jobId);
+            await jobRef.update({ status: "Link Sent!" });
+            
+            return res.status(200).send({ success: true, message: "Scheduling link sent successfully!" });
+
+        } catch (err) {
+            console.error(`A critical error occurred while processing job ${jobId}:`, err);
+            // Check if it's a Twilio error and provide a more specific message
+            if (err.code) { // Twilio errors often have a 'code' property
+                 return res.status(500).send({ success: false, message: `Failed to send SMS: ${err.message}` });
+            }
+            return res.status(500).send({ success: false, message: "An internal server error occurred." });
         }
+    }
+
+    // --- Bulk Sending Logic (Original logic with minor logging improvements) ---
+    try {
+        console.log("No specific jobId provided. Fetching all jobs with 'Needs Scheduling' status.");
+        const jobsToProcessQuery = firestore.collection('jobs').where('status', '==', 'Needs Scheduling');
+        const jobsSnapshot = await jobsToProcessQuery.get();
 
         if (jobsSnapshot.empty) {
-            console.log("DEBUGGING: No jobs found to process.");
-            res.status(200).send({ message: "No jobs needed a scheduling link." });
-            return;
+            console.log("No jobs found to process in bulk.");
+            return res.status(200).send({ success: true, message: "No jobs needed a scheduling link." });
         }
-        console.log(`DEBUGGING: Found ${jobsSnapshot.size} job(s) to process.`);
+        console.log(`Found ${jobsSnapshot.size} job(s) to process in bulk.`);
 
         // Securely fetch Twilio credentials
         const [sidVersion] = await secretManagerClient.accessSecretVersion({ name: TWILIO_SID_SECRET_NAME });
         const [tokenVersion] = await secretManagerClient.accessSecretVersion({ name: TWILIO_TOKEN_SECRET_NAME });
         const [phoneVersion] = await secretManagerClient.accessSecretVersion({ name: TWILIO_PHONE_SECRET_NAME });
-
+        
         const accountSid = sidVersion.payload.data.toString('utf8');
         const authToken = tokenVersion.payload.data.toString('utf8');
         const twilioPhoneNumber = phoneVersion.payload.data.toString('utf8');
-        
-        // --- NEW: Log credentials for verification (temporary) ---
-        console.log(`DEBUGGING: Initializing Twilio with Account SID: ${accountSid}`);
-        
         const twilioClient = twilio(accountSid, authToken);
 
         const promises = [];
         const batch = firestore.batch();
+        const jobIdsToUpdate = [];
 
         jobsSnapshot.forEach(doc => {
             const jobData = doc.data();
-            const jobId = doc.id;
+            const currentJobId = doc.id;
 
             if (jobData.phone) {
-                console.log(`DEBUGGING: Preparing to send SMS for job ID: ${jobId} to number: ${jobData.phone}`);
-                const schedulingUrl = `https://safewayos2.firebaseapp.com/scheduling.html?jobId=${jobId}`;
+                const schedulingUrl = `https://safewayos2.firebaseapp.com/scheduling.html?jobId=${currentJobId}`;
                 const messageBody = `Hello ${jobData.customer || 'Valued Customer'}, this is Safeway Garage Solutions. Please use this link to schedule your service appointment: ${schedulingUrl}`;
 
                 const smsPromise = twilioClient.messages.create({
@@ -83,31 +110,34 @@ exports['send-manual-scheduling-links'] = onRequest({ cors: true }, async (req, 
                     from: twilioPhoneNumber,
                     to: jobData.phone
                 }).then(message => {
-                    // --- NEW: Log success for each specific message ---
-                    console.log(`DEBUGGING: Twilio reported SUCCESS for job ${jobId}. Message SID: ${message.sid}`);
-                    const jobRef = firestore.collection('jobs').doc(jobId);
-                    batch.update(jobRef, { status: "Link Sent!" });
+                    console.log(`Twilio reported SUCCESS for bulk job ${currentJobId}. Message SID: ${message.sid}`);
+                    jobIdsToUpdate.push(currentJobId); // Add to list for batch update on success
                 }).catch(err => {
-                    // --- NEW: Log the specific error from Twilio ---
-                    console.error(`DEBUGGING: Twilio reported an ERROR for job ${jobId}. Error: ${err.message}`);
+                    console.error(`Twilio reported an ERROR for bulk job ${currentJobId}. Error: ${err.message}`);
+                    // We will not add this job to the batch update.
                 });
-
                 promises.push(smsPromise);
             } else {
-                console.log(`DEBUGGING: Skipping job ID: ${jobId} because it has no phone number.`);
+                console.log(`Skipping bulk job ID: ${currentJobId} because it has no phone number.`);
             }
         });
 
-        console.log(`DEBUGGING: Attempting to process ${promises.length} SMS promises.`);
-        await Promise.all(promises);
-        await batch.commit();
+        await Promise.allSettled(promises);
 
-        const successMessage = `Function finished. Processed ${promises.length} potential jobs. Check logs for individual Twilio success or failure messages.`;
+        if (jobIdsToUpdate.length > 0) {
+            jobIdsToUpdate.forEach(id => {
+                const jobRef = firestore.collection('jobs').doc(id);
+                batch.update(jobRef, { status: "Link Sent!" });
+            });
+            await batch.commit();
+        }
+
+        const successMessage = `Bulk function finished. Successfully sent ${jobIdsToUpdate.length} of ${promises.length} possible links.`;
         console.log(successMessage);
-        res.status(200).send({ message: successMessage });
+        return res.status(200).send({ success: true, message: successMessage });
 
     } catch (error) {
-        console.error("DEBUGGING: A critical error occurred in the main function body:", error);
-        res.status(500).send({ message: "An internal error occurred.", error: error.message });
+        console.error("A critical error occurred in the bulk sending function body:", error);
+        return res.status(500).send({ success: false, message: "An internal error occurred during bulk processing.", error: error.message });
     }
 });
