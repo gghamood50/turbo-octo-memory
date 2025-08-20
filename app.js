@@ -1391,93 +1391,109 @@ async function openScheduleJobModal(job) {
     const timeSlotSelect = document.getElementById('modalJobTimeSlot');
     timeSlotSelect.value = job.timeSlot || "";
 
+    const technicianContainer = document.getElementById('modalTechnicianContainer');
+    const technicianSelect = document.getElementById('modalJobTechnician');
+    const assignedToContainer = document.getElementById('modalScheduleAssignedToContainer');
+    const assignedToEl = document.getElementById('modalScheduleAssignedTo');
     const confirmBtn = document.getElementById('confirmScheduleBtn');
     const scheduleWarningMessage = document.getElementById('scheduleWarningMessage');
 
-    const updateScheduleButton = async () => {
+    // Populate technician dropdown once on modal open
+    technicianSelect.innerHTML = '<option value="">Select a technician...</option>';
+    allTechniciansData.forEach(tech => {
+        const option = document.createElement('option');
+        option.value = tech.id;
+        option.textContent = tech.name;
+        technicianSelect.appendChild(option);
+    });
+
+    const updateModalState = async () => {
         const selectedDate = dateInput.value;
         const selectedTimeSlot = timeSlotSelect.value;
+        const status = job.status || 'Needs Scheduling';
 
-        // Reset button and message state
+        // 1. Reset state at the beginning of every update
         confirmBtn.disabled = false;
-        if (scheduleWarningMessage) {
-            scheduleWarningMessage.textContent = '';
-            scheduleWarningMessage.classList.add('hidden');
+        scheduleWarningMessage.textContent = '';
+        scheduleWarningMessage.classList.add('hidden');
+        technicianContainer.classList.add('hidden');
+        assignedToContainer.classList.add('hidden');
+
+        // 2. Handle non-interactive states
+        if (status === 'Completed') {
+            confirmBtn.textContent = 'View Only';
+            confirmBtn.disabled = true;
+            if (job.assignedTechnicianName) {
+                assignedToEl.textContent = job.assignedTechnicianName;
+                assignedToContainer.classList.remove('hidden');
+            }
+            return;
         }
 
-        const status = job.status || 'Needs Scheduling'; // Normalize status
+        // 3. Perform the main check for trip sheets
+        try {
+            const tripSheetSnapshot = await db.collection("tripSheets").where("date", "==", selectedDate).get();
+            const tripSheetsExistForDate = !tripSheetSnapshot.empty;
 
-        if (status === 'Awaiting completion' && job.assignedTechnicianId) {
-            // This is a job on a trip sheet, so we are considering a reschedule.
-            if (job.scheduledDate === selectedDate && job.timeSlot === selectedTimeSlot) {
-                confirmBtn.textContent = 'Fit into trip sheet';
-                confirmBtn.disabled = true;
-                if (scheduleWarningMessage) {
-                    scheduleWarningMessage.textContent = "Job is already on that time slot and date";
-                    scheduleWarningMessage.classList.remove('hidden');
-                }
-                return;
+            // 4. Determine UI visibility and the technician to check against
+            let technicianIdForCheck = job.assignedTechnicianId;
+            if (job.assignedTechnicianId) {
+                assignedToContainer.classList.remove('hidden');
+                assignedToEl.textContent = job.assignedTechnicianName;
+            } else if (tripSheetsExistForDate) {
+                technicianContainer.classList.remove('hidden');
+                technicianIdForCheck = technicianSelect.value;
             }
 
-            // Check if a trip sheet exists for the *new* selected date.
-            const tripSheetQuery = db.collection("tripSheets")
-                .where("date", "==", selectedDate)
-                .where("technicianId", "==", job.assignedTechnicianId);
-            
-            try {
-                const snapshot = await tripSheetQuery.get();
-                if (!snapshot.empty) {
+            // 5. Set button text and state based on all information
+            if (technicianIdForCheck) {
+                const techHasSheetOnDate = tripSheetsExistForDate && tripSheetSnapshot.docs.some(doc => doc.data().technicianId === technicianIdForCheck);
+
+                if (techHasSheetOnDate) {
                     confirmBtn.textContent = 'Fit into trip sheet';
+                    if ((job.timeSlot || '').trim() === (selectedTimeSlot || '').trim() && job.scheduledDate === selectedDate) {
+                        confirmBtn.disabled = true;
+                        scheduleWarningMessage.textContent = "Job is already in this date and time slot.";
+                        scheduleWarningMessage.classList.remove('hidden');
+                    }
                 } else {
                     confirmBtn.textContent = 'Confirm Reschedule';
                 }
-            } catch (error) {
-                console.error("Error checking for trip sheets:", error);
-                confirmBtn.textContent = 'Confirm Reschedule'; // Default on error
+            } else {
+                confirmBtn.textContent = 'Confirm Schedule';
             }
-
-        } else if (status.startsWith('Scheduled') || status.startsWith('Rescheduled by') || status === 'Awaiting completion') {
-            confirmBtn.textContent = 'Confirm Reschedule';
-        } else if (status === 'Needs Scheduling' || status === 'Link Sent!') {
-            confirmBtn.textContent = 'Confirm Schedule';
-        } else {
-            // Fallback for 'Completed' or other unexpected statuses
-            confirmBtn.textContent = 'View Only';
+        } catch (error) {
+            console.error("Error updating schedule button state:", error);
+            confirmBtn.textContent = 'Error';
             confirmBtn.disabled = true;
         }
     };
 
-    // Remove old listeners to be safe, then add them.
-    dateInput.removeEventListener('change', updateScheduleButton);
-    timeSlotSelect.removeEventListener('change', updateScheduleButton);
-    dateInput.addEventListener('change', updateScheduleButton);
-    timeSlotSelect.addEventListener('change', updateScheduleButton);
+    // Add event listeners
+    dateInput.addEventListener('change', updateModalState);
+    timeSlotSelect.addEventListener('change', updateModalState);
+    technicianSelect.addEventListener('change', updateModalState);
 
+    // Link handling logic (remains the same)
     const linkContainer = document.getElementById('scheduleModalLinkContainer');
     const linkInput = document.getElementById('scheduleModalLinkInput');
     const copyBtn = document.getElementById('scheduleModalCopyBtn');
-
     if (linkContainer && linkInput && copyBtn) {
         const schedulingUrl = `${window.location.origin}/scheduling.html?jobId=${job.id}`;
         linkInput.value = schedulingUrl;
-        
         if (job.status && (job.status.startsWith('Scheduled') || job.status === 'Awaiting completion')) {
             linkContainer.classList.add('hidden');
         } else {
             linkContainer.classList.remove('hidden');
         }
-
         copyBtn.onclick = () => {
             linkInput.select();
             document.execCommand('copy');
             const originalIcon = copyBtn.innerHTML;
             copyBtn.innerHTML = `<span class="material-icons-outlined text-lg">check</span>`;
-            setTimeout(() => {
-                copyBtn.innerHTML = originalIcon;
-            }, 2000);
+            setTimeout(() => { copyBtn.innerHTML = originalIcon; }, 2000);
         };
     }
-
     const sendManualLinkBtn = document.getElementById('sendManualLinkBtn');
     if (sendManualLinkBtn) {
         const status = job.status || 'Needs Scheduling';
@@ -1488,18 +1504,8 @@ async function openScheduleJobModal(job) {
         }
     }
     
-    const assignedToContainer = document.getElementById('modalScheduleAssignedToContainer');
-    const assignedToEl = document.getElementById('modalScheduleAssignedTo');
-
-    if ((job.status === 'Awaiting completion' || job.status === 'Completed') && job.assignedTechnicianName) {
-        if (assignedToEl) assignedToEl.textContent = job.assignedTechnicianName;
-        if (assignedToContainer) assignedToContainer.classList.remove('hidden');
-    } else {
-        if (assignedToContainer) assignedToContainer.classList.add('hidden');
-    }
-
     scheduleJobModal.style.display = 'block';
-    await updateScheduleButton(); // Set initial button state
+    await updateModalState();
 }
 
 function closeScheduleJobModal() {
@@ -2345,29 +2351,72 @@ if(saveInvoiceBtn) {
         }
     });
 
-    if(scheduleJobForm) scheduleJobForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
+    const confirmScheduleBtn = document.getElementById('confirmScheduleBtn');
+    if(confirmScheduleBtn) confirmScheduleBtn.addEventListener('click', async () => {
         const confirmBtn = document.getElementById('confirmScheduleBtn');
         
         if (confirmBtn.textContent === 'Fit into trip sheet') {
+            const technicianSelect = document.getElementById('modalJobTechnician');
+            const selectedTechId = technicianSelect.value;
+            
+            // If the job doesn't have a tech yet, assign the one from the dropdown to the temp job object
+            if (!currentJobToReschedule.assignedTechnicianId && selectedTechId) {
+                const selectedTech = allTechniciansData.find(t => t.id === selectedTechId);
+                if (selectedTech) {
+                    currentJobToReschedule.assignedTechnicianId = selectedTechId;
+                    currentJobToReschedule.assignedTechnicianName = selectedTech.name;
+                } else {
+                    showMessage('Selected technician not found. Please try again.', 'error');
+                    return;
+                }
+            }
             await openFitInSheetModal();
         } else {
-            // Existing logic to schedule/reschedule
+            // Logic to schedule/reschedule
             const jobId = document.getElementById('modalScheduleJobId').value;
+            // Basic validation
+            const dateValue = document.getElementById('modalJobDate').value;
+            const timeSlotValue = document.getElementById('modalJobTimeSlot').value;
+            if (!dateValue || !timeSlotValue) {
+                showMessage('Please select a date and time slot.', 'error');
+                return;
+            }
+
             const jobRef = firebase.firestore().doc(`jobs/${jobId}`);
             const updatedData = {
                 status: 'Scheduled',
-                scheduledDate: document.getElementById('modalJobDate').value,
-                timeSlot: document.getElementById('modalJobTimeSlot').value,
+                scheduledDate: dateValue,
+                timeSlot: timeSlotValue,
                 rescheduleReason: firebase.firestore.FieldValue.delete()
             };
+
+            const technicianSelect = document.getElementById('modalJobTechnician');
+            const selectedTechId = technicianSelect.value;
+
+            if (technicianSelect.offsetParent !== null && !selectedTechId) {
+                 showMessage('Please select a technician to assign.', 'error');
+                 return;
+            }
+
+            if (selectedTechId) {
+                const selectedTech = allTechniciansData.find(t => t.id === selectedTechId);
+                if (selectedTech) {
+                    updatedData.assignedTechnicianId = selectedTechId;
+                    updatedData.assignedTechnicianName = selectedTech.name;
+                } else {
+                     showMessage('Selected technician not found. Please try again.', 'error');
+                     return;
+                }
+            }
+
             try {
                 await jobRef.update(updatedData);
                 closeScheduleJobModal();
-                showMessage('Job successfully rescheduled.', 'success');
+                const successMessage = confirmBtn.textContent === 'Confirm Schedule' ? 'Job successfully scheduled.' : 'Job successfully rescheduled.';
+                showMessage(successMessage, 'success');
             } catch (error) {
                 console.error("Error scheduling job:", error);
-                showMessage('Error rescheduling job.', 'error');
+                showMessage('Error scheduling job.', 'error');
             }
         }
     });
@@ -3454,7 +3503,11 @@ async function handleConfirmFitInSheet() {
         const jobRef = db.collection('jobs').doc(currentJobToReschedule.id);
         await jobRef.update({
             scheduledDate: newScheduledDate,
-            timeSlot: newTimeSlot
+            timeSlot: newTimeSlot,
+            status: 'Awaiting completion',
+            assignedTechnicianId: currentJobToReschedule.assignedTechnicianId,
+            assignedTechnicianName: currentJobToReschedule.assignedTechnicianName,
+            rescheduleReason: firebase.firestore.FieldValue.delete()
         });
 
         showMessage('Job successfully fitted into trip sheet!', 'success');
