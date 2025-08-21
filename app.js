@@ -1637,17 +1637,73 @@ function listenForJobs() {
     });
 }
 
+let bookedJobsListener = null;
+
+function renderCapacityAndUsage(technicians, bookedJobs) {
+    const onlineTechs = technicians.filter(tech => tech.status === 'Online');
+    const totalCapacity = onlineTechs.reduce((sum, tech) => sum + (tech.maxJobs || 0), 0);
+
+    const base = Math.floor(totalCapacity / 3);
+    const remainder = totalCapacity % 3;
+
+    let slot1_capacity = base; // 8am-2pm
+    let slot2_capacity = base; // 9am-4pm
+    let slot3_capacity = base; // 12pm-6pm
+
+    if (remainder === 1) {
+        slot2_capacity += 1;
+    } else if (remainder === 2) {
+        slot1_capacity += 1;
+        slot2_capacity += 1;
+    }
+
+    const slot1_booked = bookedJobs.filter(j => j.timeSlot === '8am to 2pm').length;
+    const slot2_booked = bookedJobs.filter(j => j.timeSlot === '9am to 4pm').length;
+    const slot3_booked = bookedJobs.filter(j => j.timeSlot === '12pm to 6pm').length;
+    const total_booked = slot1_booked + slot2_booked + slot3_booked;
+
+    document.getElementById('capacity-total-used').textContent = total_booked;
+    document.getElementById('capacity-total-total').textContent = totalCapacity;
+    document.getElementById('capacity-slot1-used').textContent = slot1_booked;
+    document.getElementById('capacity-slot1-total').textContent = slot1_capacity;
+    document.getElementById('capacity-slot2-used').textContent = slot2_booked;
+    document.getElementById('capacity-slot2-total').textContent = slot2_capacity;
+    document.getElementById('capacity-slot3-used').textContent = slot3_booked;
+    document.getElementById('capacity-slot3-total').textContent = slot3_capacity;
+}
+
+function listenForBookedCounts(dateString) {
+    if (bookedJobsListener) {
+        bookedJobsListener(); // Detach previous listener
+    }
+    const jobsQuery = db.collection('jobs')
+                        .where('scheduledDate', '==', dateString)
+                        .where('status', 'in', ['Scheduled', 'Awaiting completion']);
+
+    bookedJobsListener = jobsQuery.onSnapshot(snapshot => {
+        const bookedJobs = snapshot.docs.map(doc => doc.data());
+        renderCapacityAndUsage(allTechniciansData, bookedJobs);
+    }, (error) => {
+        console.error(`Error listening for booked jobs on ${dateString}:`, error);
+        // Display zeros if there's an error
+        renderCapacityAndUsage(allTechniciansData, []);
+    });
+}
+
 function listenForTechnicians() {
     const techQuery = firebase.firestore().collection("technicians");
     techQuery.onSnapshot((snapshot) => {
         const technicians = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         allTechniciansData = technicians;
-        // Always attempt to render technicians; renderTechnicians has internal checks
         renderTechnicians(technicians); 
-        
         populateTechnicianDropdowns();
-        // If on dashboard, tech data might be relevant for map or other elements (future)
-        // if (currentView === 'dashboard') { /* Potentially update dashboard elements */ }
+        
+        const capacityDatePicker = document.getElementById('capacity-date-picker');
+        if (capacityDatePicker && capacityDatePicker.value) {
+            // This will re-run the renderCapacityAndUsage with the new technician data
+            // and the existing booking data from its own listener.
+            listenForBookedCounts(capacityDatePicker.value);
+        }
     }, (error) => console.error("Error listening for technicians:", error));
 }
 
@@ -3323,6 +3379,19 @@ if (sendAllInvoicesBtn) {
                         listenForAllInvoices();
                         if (tripSheetDateInput.value) {
                            loadTripSheetsForDate(tripSheetDateInput.value);
+                        }
+
+                        const capacityDatePicker = document.getElementById('capacity-date-picker');
+                        if (capacityDatePicker) {
+                            const tomorrow = new Date();
+                            tomorrow.setDate(tomorrow.getDate() + 1);
+                            capacityDatePicker.value = tomorrow.toISOString().split('T')[0];
+
+                            listenForBookedCounts(capacityDatePicker.value);
+
+                            capacityDatePicker.addEventListener('change', () => {
+                                listenForBookedCounts(capacityDatePicker.value);
+                            });
                         }
                     });
                     initializeDanielAIChat();
