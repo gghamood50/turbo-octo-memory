@@ -1447,14 +1447,24 @@ async function openScheduleJobModal(job) {
 
             // 5. Set button text and state based on all information
             if (technicianIdForCheck) {
-                const techHasSheetOnDate = tripSheetsExistForDate && tripSheetSnapshot.docs.some(doc => doc.data().technicianId === technicianIdForCheck);
+                const techTripSheetDoc = tripSheetsExistForDate ? tripSheetSnapshot.docs.find(doc => doc.data().technicianId === technicianIdForCheck) : null;
 
-                if (techHasSheetOnDate) {
+                if (techTripSheetDoc) {
                     confirmBtn.textContent = 'Fit into trip sheet';
-                    if ((job.timeSlot || '').trim() === (selectedTimeSlot || '').trim() && job.scheduledDate === selectedDate) {
-                        confirmBtn.disabled = true;
-                        scheduleWarningMessage.textContent = "Job is already in this date and time slot.";
-                        scheduleWarningMessage.classList.remove('hidden');
+                    const techTripSheet = techTripSheetDoc.data();
+                    const jobInRoute = techTripSheet.route.find(routeJob => routeJob.id === job.id);
+
+                    // Defensively check if the button should be disabled.
+                    confirmBtn.disabled = false; // Default to enabled
+                    if (jobInRoute) {
+                        const existingSlotInRoute = String(jobInRoute.timeSlot || '').trim();
+                        const newlySelectedSlot = String(selectedTimeSlot || '').trim();
+
+                        if (existingSlotInRoute === newlySelectedSlot) {
+                            confirmBtn.disabled = true;
+                            scheduleWarningMessage.textContent = "Job is already in this trip sheet for this time slot.";
+                            scheduleWarningMessage.classList.remove('hidden');
+                        }
                     }
                 } else {
                     confirmBtn.textContent = 'Confirm Reschedule';
