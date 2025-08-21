@@ -1368,10 +1368,34 @@ async function openScheduleJobModal(job) {
     if (!job) return;
 
     const schedulingControlsContainer = document.getElementById('schedulingControlsContainer');
+    const associatedInvoicesSection = document.getElementById('associatedInvoicesSection');
+    const associatedInvoicesList = document.getElementById('associatedInvoicesList');
+
+    // Reset and hide the invoices section by default
+    associatedInvoicesSection.classList.add('hidden');
+    associatedInvoicesList.innerHTML = '';
+
     if (job.status === 'Completed') {
         if(schedulingControlsContainer) schedulingControlsContainer.classList.add('hidden');
+        
+        // --- NEW LOGIC FOR ASSOCIATED INVOICES ---
+        const relatedInvoices = allInvoicesData.filter(invoice => invoice.jobId === job.id);
+
+        if (relatedInvoices.length > 0) {
+            associatedInvoicesList.innerHTML = relatedInvoices.map(invoice => {
+                // Use a button for better accessibility and event handling
+                return `<button class="text-green-600 hover:underline cursor-pointer view-invoice-btn" data-id="${invoice.id}">
+                            Invoice ${invoice.invoiceNumber || 'N/A'} [${invoice.invoiceType || 'N/A'}]
+                        </button>`;
+            }).join('<br>'); // Use <br> for simple line breaks between invoices
+        } else {
+            associatedInvoicesList.innerHTML = `<p class="text-slate-500">No associated invoices found.</p>`;
+        }
+        associatedInvoicesSection.classList.remove('hidden');
+
     } else {
         if(schedulingControlsContainer) schedulingControlsContainer.classList.remove('hidden');
+        associatedInvoicesSection.classList.add('hidden');
     }
 
     currentJobToReschedule = job; // Store the job globally for this modal
