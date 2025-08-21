@@ -51,6 +51,11 @@ async function geocodeAddress(address) {
     throw new Error(`Geocoding failed for "${address}" (${j.status})`);
   }
   const { lat, lng } = j.results[0].geometry.location;
+  if (typeof lat !== "number" || typeof lng !== "number") {
+    throw new Error(
+      `Geocoding for address "${address}" returned invalid coordinates. Received: lat=${lat}, lng=${lng}`
+    );
+  }
   // google.type.LatLng expects {latitude, longitude}
   return { latitude: lat, longitude: lng };
 }
@@ -196,7 +201,7 @@ exports.generateOptimizedTripSheets = functions.https.onRequest((req, res) => {
       const batch = firestore.batch();
       finalTripSheets.forEach((sheet) => {
         const docId = `${targetDate}_${sheet.technicianId}`;
-        const docRef = firestore.collection("tripSheets").doc(docId);
+        const docRef = firestore.collection("previewTripSheets").doc(docId);
         batch.set(docRef, {
           ...sheet,
           date: targetDate,
