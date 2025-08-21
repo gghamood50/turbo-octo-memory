@@ -3743,7 +3743,12 @@ function handleDeleteTechnician(techId) {
 
 async function showInvoiceScreen(jobId) {
     currentJobIdForInvoicing = jobId;
-    const job = allJobsData.find(j => j.id === jobId);
+    let job = allJobsData.find(j => j.id === jobId);
+
+    if (!job) {
+        job = currentWorkerAssignedJobs.find(j => j.id === jobId);
+    }
+    
     if (!job) {
         console.error("Job not found for invoice creation:", jobId);
         alert("Could not find the job details to create an invoice.");
