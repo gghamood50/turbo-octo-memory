@@ -1366,6 +1366,14 @@ function closeEditTechModal() {
 
 async function openScheduleJobModal(job) {
     if (!job) return;
+
+    const schedulingControlsContainer = document.getElementById('schedulingControlsContainer');
+    if (job.status === 'Completed') {
+        if(schedulingControlsContainer) schedulingControlsContainer.classList.add('hidden');
+    } else {
+        if(schedulingControlsContainer) schedulingControlsContainer.classList.remove('hidden');
+    }
+
     currentJobToReschedule = job; // Store the job globally for this modal
     document.getElementById('modalScheduleJobId').value = job.id;
     document.getElementById('modalScheduleCustomer').textContent = job.customer || 'N/A';
@@ -1491,7 +1499,7 @@ async function openScheduleJobModal(job) {
     if (linkContainer && linkInput && copyBtn) {
         const schedulingUrl = `${window.location.origin}/scheduling.html?jobId=${job.id}`;
         linkInput.value = schedulingUrl;
-        if (job.status && (job.status.startsWith('Scheduled') || job.status === 'Awaiting completion')) {
+        if (job.status && (job.status.startsWith('Scheduled') || job.status === 'Awaiting completion' || job.status === 'Completed')) {
             linkContainer.classList.add('hidden');
         } else {
             linkContainer.classList.remove('hidden');
