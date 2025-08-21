@@ -116,6 +116,59 @@
         let db;
         let selectedTimeSlot = null;
 
+        async function updateSlotsAvailability() {
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            const dateString = tomorrow.toISOString().split('T')[0];
+
+            // Calculate capacities (same as before)
+            const techniciansSnapshot = await db.collection('technicians').where('status', '==', 'Online').get();
+            const onlineTechs = techniciansSnapshot.docs.map(d => d.data());
+            const totalCapacity = onlineTechs.reduce((sum, tech) => sum + (tech.maxJobs || 0), 0);
+            const base = Math.floor(totalCapacity / 3);
+            const remainder = totalCapacity % 3;
+            let slot1_capacity = base, slot2_capacity = base, slot3_capacity = base;
+            if (remainder === 1) {
+                slot2_capacity += 1;
+            } else if (remainder === 2) {
+                slot1_capacity += 1;
+                slot2_capacity += 1;
+            }
+            const capacities = {
+                '8am to 2pm': slot1_capacity,
+                '9am to 4pm': slot2_capacity,
+                '12pm to 6pm': slot3_capacity
+            };
+
+            // Fetch booked jobs from the 'jobs' collection
+            const jobsQuery = db.collection('jobs')
+                                .where('scheduledDate', '==', dateString)
+                                .where('status', 'in', ['Scheduled', 'Awaiting completion']);
+            const jobsSnapshot = await jobsQuery.get();
+            const bookedJobs = jobsSnapshot.docs.map(doc => doc.data());
+
+            // Compare and hide slots
+            const timeSlotButtons = document.querySelectorAll('.time-slot-btn');
+            let availableSlots = 0;
+            timeSlotButtons.forEach(button => {
+                const slotName = button.dataset.slot;
+                const capacity = capacities[slotName] || 0;
+                const bookedCount = bookedJobs.filter(j => j.timeSlot === slotName).length;
+
+                if (bookedCount >= capacity) {
+                    button.style.display = 'none';
+                } else {
+                    button.style.display = 'block';
+                    availableSlots++;
+                }
+            });
+
+            if (availableSlots === 0) {
+                showError("We're sorry, but all time slots for tomorrow are fully booked. Please contact our office to schedule.");
+                schedulingScreen.style.display = 'none';
+            }
+        }
+
         document.addEventListener('DOMContentLoaded', async () => {
             try {
                 if (!firebase.apps.length) {
@@ -142,7 +195,6 @@
                 const jobData = jobDoc.data();
 
                 if (jobData.status && jobData.status.startsWith('Scheduled')) {
-                    // Allow rescheduling
                     document.querySelector('#schedulingScreen h2').textContent = 'Reschedule Your Appointment';
                     confirmTimeSlotBtn.textContent = 'Confirm Reschedule';
                 } else if (jobData.status !== 'Needs Scheduling' && jobData.status !== 'Link Sent!') {
@@ -150,19 +202,19 @@
                     return;
                 }
 
-                // Populate the UI
+                await updateSlotsAvailability();
+
                 customerNameEl.textContent = jobData.customer || 'Valued Customer';
                 serviceAddressEl.textContent = jobData.address || 'N/A';
                 
                 loadingScreen.style.display = 'none';
-                schedulingScreen.style.display = 'block';
+                if (errorScreen.style.display !== 'block') {
+                    schedulingScreen.style.display = 'block';
+                }
 
-                // Add event listeners
                 timeSlotsContainer.addEventListener('click', (e) => {
-                    if (e.target.tagName === 'BUTTON') {
-                        // Remove 'selected' from all buttons
+                    if (e.target.tagName === 'BUTTON' && e.target.style.display !== 'none') {
                         timeSlotsContainer.querySelectorAll('.time-slot-btn').forEach(btn => btn.classList.remove('selected'));
-                        // Add 'selected' to the clicked button
                         e.target.classList.add('selected');
                         selectedTimeSlot = e.target.dataset.slot;
                         confirmTimeSlotBtn.disabled = false;
@@ -180,9 +232,11 @@
                     confirmTimeSlotBtn.textContent = 'Confirming...';
 
                     try {
-                        const today = new Date();
-                        const scheduledDate = today.toISOString().split('T')[0]; // YYYY-MM-DD format
+                        const tomorrow = new Date();
+                        tomorrow.setDate(tomorrow.getDate() + 1);
+                        const scheduledDate = tomorrow.toISOString().split('T')[0];
 
+                        // Note: jobRef and jobData are available from the outer scope here
                         await jobRef.update({
                             status: 'Scheduled',
                             timeSlot: selectedTimeSlot,
