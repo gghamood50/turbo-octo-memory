@@ -73,6 +73,40 @@ body {
     border: 1px solid #a7f3d0;
     cursor: pointer;
 }
+
+.btn-invoice-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem; /* Space between icon and text */
+    border-radius: 0.375rem; /* rounded-md */
+    border: 1px solid #cbd5e1; /* slate-300 */
+    background-color: white;
+    padding: 0.5rem 0.75rem; /* A bit more padding */
+    font-size: 0.875rem; /* text-sm */
+    font-weight: 500; /* medium */
+    color: #334155; /* slate-700 */
+    cursor: pointer;
+    transition: background-color 0.2s, border-color 0.2s;
+    text-decoration: none; /* Remove underline from potential link usage */
+}
+
+.btn-invoice-link:hover {
+    background-color: #f1f5f9; /* slate-100 */
+    border-color: #94a3b8; /* slate-400 */
+}
+
+.btn-invoice-link .material-icons-outlined {
+    font-size: 1.25rem; /* text-xl */
+    color: #64748b; /* slate-500 */
+}
+
+.invoice-button-container {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem; /* space-y-2 */
+    align-items: flex-start; /* Align buttons to the left */
+    width: 100%;
+}
 .btn-danger-stitch {
     display: inline-flex;
     align-items: center;
@@ -157,6 +191,10 @@ body {
     height: 100%;
     overflow: auto;
     background-color: rgba(0,0,0,0.5);
+}
+
+.modal-top {
+    z-index: 1200;
 }
 .modal-content {
     background-color: #ffffff;
