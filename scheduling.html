@@ -53,7 +53,7 @@
                 <p><strong>Customer:</strong> <span id="customerName"></span></p>
                 <p><strong>Service Address:</strong> <span id="serviceAddress"></span></p>
             </div>
-            <p class="text-slate-600 mt-6 mb-4 text-center">Please select a preferred time slot for your service:</p>
+            <p id="schedulingInstructions" class="text-slate-600 mt-6 mb-4 text-center">Please select a preferred time slot for your service:</p>
             <div id="timeSlotsContainer" class="grid grid-cols-1 gap-4">
                 <button data-slot="8am to 2pm" class="time-slot-btn w-full text-left p-4 border rounded-lg font-medium">8:00 AM - 2:00 PM</button>
                 <button data-slot="9am to 4pm" class="time-slot-btn w-full text-left p-4 border rounded-lg font-medium">9:00 AM - 4:00 PM</button>
@@ -71,7 +71,7 @@
                 <div class="mt-4 bg-green-50 text-green-800 p-6 rounded-lg text-center">
                     <span class="material-icons-outlined text-5xl">task_alt</span>
                     <p class="font-bold mt-2">Thank You, <span id="confirmedCustomerName"></span>!</p>
-                    <p class="mt-1">Your service for <strong id="confirmedAddress"></strong> is confirmed for the time slot:</p>
+                    <p class="mt-1">Your service for <strong id="confirmedAddress"></strong> is confirmed for <strong id="confirmedDate"></strong> in the time slot:</p>
                     <p class="text-2xl font-bold mt-2" id="confirmedTimeSlot"></p>
                 </div>
                 <p class="text-slate-500 text-sm mt-4">We will contact you on the day of service. You can now close this window.</p>
@@ -193,14 +193,21 @@
                 }
 
                 const jobData = jobDoc.data();
+                
+                const tomorrow = new Date();
+                tomorrow.setDate(tomorrow.getDate() + 1);
+                const friendlyDate = tomorrow.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
                 if (jobData.status && jobData.status.startsWith('Scheduled')) {
-                    document.querySelector('#schedulingScreen h2').textContent = 'Reschedule Your Appointment';
-                    confirmTimeSlotBtn.textContent = 'Confirm Reschedule';
+                    document.querySelector('#confirmationScreen h2').textContent = 'Your Appointment is Already Scheduled!';
+                    showConfirmation(jobData.customer, jobData.address, jobData.timeSlot, jobData.scheduledDate);
+                    return;
                 } else if (jobData.status !== 'Needs Scheduling' && jobData.status !== 'Link Sent!') {
                     showError(`This appointment cannot be scheduled or rescheduled. Status: ${jobData.status}.`);
                     return;
                 }
+                
+                document.getElementById('schedulingInstructions').textContent = `Please select a preferred time slot for your service on ${friendlyDate}:`;
 
                 await updateSlotsAvailability();
 
@@ -243,7 +250,7 @@
                             scheduledDate: scheduledDate
                         });
                         
-                        showConfirmation(jobData.customer, jobData.address, selectedTimeSlot);
+                        showConfirmation(jobData.customer, jobData.address, selectedTimeSlot, scheduledDate);
 
                     } catch (error) {
                         console.error("Error updating job:", error);
@@ -267,10 +274,20 @@
             errorScreen.style.display = 'block';
         }
         
-        function showConfirmation(customer, address, slot) {
+        function showConfirmation(customer, address, slot, date) {
             document.getElementById('confirmedCustomerName').textContent = customer;
             document.getElementById('confirmedAddress').textContent = address;
             document.getElementById('confirmedTimeSlot').textContent = slot;
+            
+            if (date) {
+                // The date from firestore is YYYY-MM-DD. To avoid timezone issues, 
+                // we treat it as UTC.
+                const parts = date.split('-');
+                const utcDate = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2]));
+                const friendlyDate = utcDate.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+                document.getElementById('confirmedDate').textContent = friendlyDate;
+            }
+
             schedulingScreen.style.display = 'none';
             confirmationScreen.style.display = 'block';
         }
