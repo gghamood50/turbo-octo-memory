@@ -3096,7 +3096,17 @@ if(saveInvoiceBtn) {
             const batch = firebase.firestore().batch();
             const jobsToUpdate = new Map();
     
+            // 1. Prepare to move trip sheets and update jobs
             currentTripSheets.forEach(sheet => {
+                // Add trip sheet to the main collection
+                const newTripSheetRef = firebase.firestore().collection('tripSheets').doc(sheet.id);
+                batch.set(newTripSheetRef, sheet);
+    
+                // Delete trip sheet from the preview collection
+                const oldTripSheetRef = firebase.firestore().collection('previewTripSheets').doc(sheet.id);
+                batch.delete(oldTripSheetRef);
+    
+                // Collect all jobs that need their status updated
                 sheet.route.forEach(job => {
                     const liveJob = allJobsData.find(j => j.id === job.id);
                     if (liveJob && liveJob.status === 'Scheduled') {
@@ -3108,6 +3118,7 @@ if(saveInvoiceBtn) {
                 });
             });
     
+            // 2. Update the status of all collected jobs
             if (jobsToUpdate.size > 0) {
                 jobsToUpdate.forEach((techInfo, jobId) => {
                     const jobRef = firebase.firestore().doc(`jobs/${jobId}`);
@@ -3117,13 +3128,23 @@ if(saveInvoiceBtn) {
                         assignedTechnicianName: techInfo.technicianName
                     });
                 });
-                await batch.commit();
-                scheduleStatus.textContent = `Successfully approved ${jobsToUpdate.size} jobs for ${date}. Technicians have been notified.`;
-            } else {
-                scheduleStatus.textContent = `All jobs for ${date} were already approved.`;
-                approveTripSheetsBtn.innerHTML = `<span class="material-icons-outlined">check_circle_outline</span>Sheets Approved`;
-                approveTripSheetsBtn.disabled = true;
             }
+    
+            // 3. Commit all changes in one atomic operation
+            await batch.commit();
+    
+            // 4. Update UI
+            if (jobsToUpdate.size > 0) {
+                 scheduleStatus.textContent = `Successfully approved ${jobsToUpdate.size} jobs for ${date}. Trip sheets have been finalized.`;
+            } else {
+                scheduleStatus.textContent = `All jobs for ${date} were already approved. Trip sheets have been finalized.`;
+            }
+            
+            // The listener on previewTripSheets will automatically clear the UI,
+            // and we can disable the button.
+            approveTripSheetsBtn.innerHTML = `<span class="material-icons-outlined">check_circle_outline</span>Sheets Approved`;
+            approveTripSheetsBtn.disabled = true;
+    
     
         } catch (error) {
             console.error("Error approving trip sheets:", error);
@@ -3461,17 +3482,43 @@ function loadTripSheetsForDate(dateString) {
         if (tripSheetApprovalContainer) tripSheetApprovalContainer.classList.add('hidden');
         return;
     }
+
     if (currentTripSheetListener) {
         currentTripSheetListener(); 
     }
-    const tripSheetQuery = firebase.firestore().collection("tripSheets").where("date", "==", dateString);
-    currentTripSheetListener = tripSheetQuery.onSnapshot((snapshot) => {
-        const sheets = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        if (currentView === 'schedule' && tripSheetDateInput.value === dateString) {
+
+    // We set up a listener on the preview collection.
+    // This allows the UI to update in real-time when sheets are generated.
+    const previewQuery = firebase.firestore().collection("previewTripSheets").where("date", "==", dateString);
+    
+    currentTripSheetListener = previewQuery.onSnapshot((previewSnapshot) => {
+        // Guard against stale listeners firing after the user has changed the date/view
+        if (currentView !== 'schedule' || tripSheetDateInput.value !== dateString) {
+            return;
+        }
+
+        if (!previewSnapshot.empty) {
+            // If we find sheets in the preview collection, we display them for approval.
+            const sheets = previewSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             renderTripSheets(sheets, dateString);
+        } else {
+            // If the preview collection is empty, we fall back to checking the main collection
+            // for already-approved sheets for that day.
+            const approvedQuery = firebase.firestore().collection("tripSheets").where("date", "==", dateString);
+            approvedQuery.get().then(approvedSnapshot => {
+                // Another guard to ensure the date/view hasn't changed during the async fetch
+                if (currentView === 'schedule' && tripSheetDateInput.value === dateString) {
+                    const sheets = approvedSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    renderTripSheets(sheets, dateString);
+                }
+            }).catch(error => {
+                console.error(`Error getting approved trip sheets for ${dateString}:`, error);
+                if (tripSheetsContainer) tripSheetsContainer.innerHTML = `<div class="text-center py-8 text-red-500"><p>Error loading trip sheets for ${dateString}.</p></div>`;
+                if (tripSheetApprovalContainer) tripSheetApprovalContainer.classList.add('hidden');
+            });
         }
     }, (error) => {
-        console.error(`Error listening to trip sheets for ${dateString}:`, error);
+        console.error(`Error listening to preview trip sheets for ${dateString}:`, error);
         if (tripSheetsContainer) tripSheetsContainer.innerHTML = `<div class="text-center py-8 text-red-500"><p>Error loading trip sheets for ${dateString}.</p></div>`;
         if (tripSheetApprovalContainer) tripSheetApprovalContainer.classList.add('hidden');
     });
