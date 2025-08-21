@@ -172,6 +172,30 @@
                                     </button>
                                 </div>
                             </div>
+                            <div id="capacity-display" class="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm">
+                                <div class="flex justify-between items-center mb-2">
+                                    <h4 class="font-bold text-blue-800">Scheduling Capacity & Usage</h4>
+                                    <input type="date" id="capacity-date-picker" class="form-input form-input-sm py-1 px-2 border-slate-300 shadow-sm rounded-md">
+                                </div>
+                                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                                    <div>
+                                        <p class="text-blue-600">Total</p>
+                                        <p class="text-2xl font-bold text-blue-900"><span id="capacity-total-used">-</span> / <span id="capacity-total-total">-</span></p>
+                                    </div>
+                                    <div>
+                                        <p class="text-blue-600">8am - 2pm</p>
+                                        <p class="text-2xl font-bold text-blue-900"><span id="capacity-slot1-used">-</span> / <span id="capacity-slot1-total">-</span></p>
+                                    </div>
+                                    <div>
+                                        <p class="text-blue-600">9am - 4pm</p>
+                                        <p class="text-2xl font-bold text-blue-900"><span id="capacity-slot2-used">-</span> / <span id="capacity-slot2-total">-</span></p>
+                                    </div>
+                                    <div>
+                                        <p class="text-blue-600">12pm - 6pm</p>
+                                        <p class="text-2xl font-bold text-blue-900"><span id="capacity-slot3-used">-</span> / <span id="capacity-slot3-total">-</span></p>
+                                    </div>
+                                </div>
+                            </div>
                             <div class="overflow-x-auto">
                                 <table class="custom-table" id="jobsTable"> 
                                     <thead>
