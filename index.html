@@ -837,7 +837,7 @@
         </div>
     </div>
 
-    <div id="invoiceViewModal" class="modal" style="display: none;">
+    <div id="invoiceViewModal" class="modal modal-top" style="display: none; z-index: 1200;">
         <div class="modal-content">
             <div class="modal-header">
                 <h2 id="modalInvoiceTitle">Invoice Details</h2>
@@ -1242,7 +1242,7 @@
     </div>
 
     <!-- PDF Preview Modal -->
-    <div id="pdfPreviewModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden items-center justify-center">
+    <div id="pdfPreviewModal" class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center" style="z-index: 1300;">
         <div class="bg-white rounded-lg shadow-xl w-11/12 h-5/6 max-w-4xl flex flex-col">
             <div class="flex justify-between items-center p-4 border-b">
                 <h3 class="text-lg font-semibold">Invoice Preview</h3>
