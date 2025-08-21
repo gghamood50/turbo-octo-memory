@@ -1382,12 +1382,13 @@ async function openScheduleJobModal(job) {
         const relatedInvoices = allInvoicesData.filter(invoice => invoice.jobId === job.id);
 
         if (relatedInvoices.length > 0) {
-            associatedInvoicesList.innerHTML = relatedInvoices.map(invoice => {
-                // Use a button for better accessibility and event handling
-                return `<button class="text-green-600 hover:underline cursor-pointer view-invoice-btn" data-id="${invoice.id}">
-                            Invoice ${invoice.invoiceNumber || 'N/A'} [${invoice.invoiceType || 'N/A'}]
-                        </button>`;
-            }).join('<br>'); // Use <br> for simple line breaks between invoices
+            const buttonsHtml = relatedInvoices.map(invoice => {
+                return `<a href="#" class="btn-invoice-link view-invoice-btn" data-id="${invoice.id}" role="button">
+                            <span class="material-icons-outlined">receipt_long</span>
+                            <span>Invoice ${invoice.invoiceNumber || 'N/A'} [${invoice.invoiceType || 'N/A'}]</span>
+                        </a>`;
+            }).join('');
+            associatedInvoicesList.innerHTML = `<div class="invoice-button-container">${buttonsHtml}</div>`;
         } else {
             associatedInvoicesList.innerHTML = `<p class="text-slate-500">No associated invoices found.</p>`;
         }
@@ -2610,8 +2611,9 @@ if(saveInvoiceBtn) {
             const warrantyData = allWarrantiesData.find(w => w.id === warrantyId);
             if(warrantyData) openWarrantyDetailModal(warrantyData);
         }
-        if (event.target.classList.contains('view-invoice-btn')) {
-            const invoiceId = event.target.dataset.id;
+        const viewInvoiceBtn = event.target.closest('.view-invoice-btn');
+        if (viewInvoiceBtn) {
+            const invoiceId = viewInvoiceBtn.dataset.id;
             openInvoiceViewModal(invoiceId);
         }
     });
