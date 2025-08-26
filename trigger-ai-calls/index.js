@@ -1,19 +1,15 @@
-const functions = require("firebase-functions");
 const admin = require("firebase-admin");
+const express = require('express');
+const app = express();
 
-// Initialize the Firebase Admin SDK if it hasn't been already.
-if (admin.apps.length === 0) {
-  admin.initializeApp();
-}
-
+// Initialize the Firebase Admin SDK.
+// In Cloud Run, it automatically finds the project credentials and ID.
+admin.initializeApp();
 const db = admin.firestore();
 
-/**
- * A Cloud Function that triggers AI calls for jobs where the link was sent more than an hour ago.
- * This function is scheduled to run every 5 minutes.
- */
-exports.triggerAiCalls = functions.pubsub.schedule("every 5 minutes").onRun(async (context) => {
-  console.log("Starting trigger-ai-calls function run.");
+// Create a handler for POST requests, which is what Eventarc sends.
+app.post('/', async (req, res) => {
+  console.log("Starting trigger-ai-calls job.");
 
   try {
     // 1. Get the current server timestamp.
@@ -31,7 +27,8 @@ exports.triggerAiCalls = functions.pubsub.schedule("every 5 minutes").onRun(asyn
 
     if (snapshot.empty) {
       console.log("No jobs found to update.");
-      return null;
+      // Always send a success response to the trigger.
+      return res.status(200).send("OK: No jobs to update.");
     }
 
     // 4. Use a batch write to update the documents.
@@ -43,13 +40,20 @@ exports.triggerAiCalls = functions.pubsub.schedule("every 5 minutes").onRun(asyn
 
     await batch.commit();
 
-    // 5. Log the result.
+    // 5. Log the result and send a success response.
     const count = snapshot.size;
     console.log(`Updated ${count} job(s) to 'Trigger call'.`);
+    res.status(200).send(`OK: Updated ${count} job(s).`);
 
   } catch (error) {
-    console.error("Error in trigger-ai-calls function:", error);
+    console.error("Error in trigger-ai-calls job:", error);
+    // Send an error response so the logs show a failure.
+    res.status(500).send("Error: See logs for details.");
   }
+});
 
-  return null;
+// Cloud Run provides the PORT environment variable.
+const port = process.env.PORT || 8080;
+app.listen(port, () => {
+  console.log(`trigger-ai-calls listening on port ${port}`);
 });
