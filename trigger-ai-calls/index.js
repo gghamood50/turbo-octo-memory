@@ -23,7 +23,6 @@ function prepareBlandAiRequest(apiKey, payload) {
     phone_number: payload.phone_to_call,
     pathway_id: pathwayId,
     request_data: payload,
-    webhook: 'https://bland-ai-webhook-216681158749.us-central1.run.app',
   };
 
   const headers = {
@@ -34,9 +33,40 @@ function prepareBlandAiRequest(apiKey, payload) {
   return { body, headers };
 }
 
+/**
+ * Sends a prepared request to the Bland AI API to initiate a call.
+ *
+ * @param {{body: object, headers: object}} request - The request object containing the body and headers.
+ * @returns {Promise<string>} A promise that resolves with the call_id from the API response.
+ * @throws {Error} Throws an error if the API call fails or returns a non-successful status.
+ */
+async function sendBlandAiCall(request) {
+  const url = 'https://api.bland.ai/v1/calls';
+
+  try {
+    const response = await axios.post(url, request.body, { headers: request.headers });
+
+    // THE FIX IS HERE: Check for status === 'success' instead of a boolean success field.
+    if (response.data && response.data.status === 'success') {
+      return response.data.call_id;
+    } else {
+      // Bland AI might return a 200 OK but with a non-success status.
+      const errorMessage = response.data.message || 'Bland AI call was not successful.';
+      throw new Error(errorMessage);
+    }
+  } catch (error) {
+    // This will catch network errors and errors thrown from the try block.
+    // Axios wraps the error, so we check for response data for more specific messages.
+    const errorMessage = error.response?.data?.message || error.message;
+    console.error('Bland AI API call failed:', errorMessage);
+    throw new Error(`Bland AI API call failed: ${errorMessage}`);
+  }
+}
+
 const admin = require("firebase-admin");
 const express = require('express');
 const https = require('https');
+const axios = require('axios');
 const { SecretManagerServiceClient } = require('@google-cloud/secret-manager');
 const app = express();
 
@@ -146,61 +176,71 @@ app.post('/', async (req, res) => {
     }
 
     // 4. Process each job individually.
-    const batch = db.batch();
     const promises = [];
     snapshot.forEach(doc => {
       const jobData = doc.data();
       const jobId = doc.id;
+      const jobRef = db.collection("jobs").doc(jobId);
 
-      // Add a status update to the batch for this job.
-      const jobRef = db.collection("jobs").doc(doc.id);
-      batch.update(jobRef, { status: "Trigger call" });
-
-      // The main logic will be wrapped in a promise and added to the promises array.
+      // The main logic for each job is wrapped in a promise.
+      // This allows us to process jobs in parallel and wait for all to complete.
       const processingPromise = (async () => {
-        console.log(`Processing job with ID: ${jobId}`);
-        
-        const dateNextDay = getTomorrowInLosAngeles();
+        try {
+          console.log(`Processing job with ID: ${jobId}`);
 
-        // Call the availability checker API and get the gaps.
-        const availability = await getAvailability(dateNextDay);
-        const { primary_gap, secondary_gap, final_gap } = availability;
+          // Step 1: Get API Key and Availability
+          const blandAiApiKey = await getBlandApiKey();
+          const dateNextDay = getTomorrowInLosAngeles();
+          const availability = await getAvailability(dateNextDay);
+          const { primary_gap, secondary_gap, final_gap } = availability;
 
-        // 4. Construct and log the final JSON payload.
-        const customer_name = jobData.customer;
-        const phone = jobData.phone;
-        const phone_to_call = (phone === '+18777804236') ? '+971507471805' : phone;
+          // Step 2: Construct the payload for Bland AI
+          const customer_name = jobData.customer;
+          const phone = jobData.phone;
+          // Use a test number for the specific customer number, otherwise use the job's phone.
+          const phone_to_call = (phone === '+18777804236') ? '+971507471805' : phone;
 
-        const logPayload = {
-          message: "Prepared to call job",
-          jobId: jobId,
-          blandAiPayload: {
+          const blandAiPayload = {
             customer_name: customer_name,
             date_next_day: dateNextDay,
             primary_gap: primary_gap,
             secondary_gap: secondary_gap,
             final_gap: final_gap,
-            callback_num: "+971507471805",
+            callback_num: "+971507471805", // Static callback number
             phone_to_call: phone_to_call,
-          }
-        };
+          };
 
-        // Log the final object to the console.
-        console.log(JSON.stringify(logPayload, null, 2));
+          // Step 3: Prepare and send the API request
+          const blandAiRequest = prepareBlandAiRequest(blandAiApiKey, blandAiPayload);
+          const call_id = await sendBlandAiCall(blandAiRequest);
+
+          // Step 4: Update the job with the success status and call ID
+          await jobRef.update({
+            status: "AI Call Initiated",
+            blandCallId: call_id,
+          });
+
+          console.log(`Successfully initiated AI call for job ${jobId}. Call ID: ${call_id}`);
+
+        } catch (error) {
+          // If any step fails, log the error and update the job status to "AI Call Failed".
+          console.error(`Failed to process job ${jobId}:`, error.message);
+          await jobRef.update({
+            status: "AI Call Failed",
+            errorReason: error.message,
+          });
+        }
       })();
       promises.push(processingPromise);
     });
 
-    // Wait for all jobs to be processed (i.e., for all logging to complete).
+    // Wait for all job processing promises to settle.
     await Promise.all(promises);
-
-    // Commit the batch update to change the status of all jobs.
-    await batch.commit();
 
     // 5. Log the result and send a success response.
     const count = snapshot.size;
-    console.log(`Processed and updated ${count} job(s) to 'Trigger call'.`);
-    res.status(200).send(`OK: Processed and updated ${count} job(s).`);
+    console.log(`Attempted to process ${count} job(s).`);
+    res.status(200).send(`OK: Attempted to process ${count} job(s). Check logs for details.`);
 
   } catch (error) {
     console.error("Error in trigger-ai-calls job:", error);
