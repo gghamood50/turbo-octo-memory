@@ -22,6 +22,7 @@ function prepareBlandAiRequest(apiKey, payload) {
   const body = {
     phone_number: payload.phone_to_call,
     pathway_id: pathwayId,
+    webhook: 'https://bland-ai-webhook-216681158749.us-central1.run.app',
     request_data: payload,
   };
 
