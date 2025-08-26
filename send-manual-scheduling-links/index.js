@@ -6,7 +6,7 @@ const twilio = require('twilio');
 
 admin.initializeApp();
 
-const firestore = new Firestore();
+const firestore = admin.firestore();
 const secretManagerClient = new SecretManagerServiceClient();
 
 // Define the full resource names for the secrets
@@ -57,7 +57,7 @@ exports['send-manual-scheduling-links'] = onRequest({ cors: true }, async (req, 
             console.log(`Twilio reported SUCCESS for job ${jobId}. Message SID: ${message.sid}`);
             
             const jobRef = firestore.collection('jobs').doc(jobId);
-            await jobRef.update({ status: "Link Sent!" });
+            await jobRef.update({ status: "Link Sent!", linkSentAt: admin.firestore.FieldValue.serverTimestamp() });
             
             return res.status(200).send({ success: true, message: "Scheduling link sent successfully!" });
 
@@ -127,7 +127,7 @@ exports['send-manual-scheduling-links'] = onRequest({ cors: true }, async (req, 
         if (jobIdsToUpdate.length > 0) {
             jobIdsToUpdate.forEach(id => {
                 const jobRef = firestore.collection('jobs').doc(id);
-                batch.update(jobRef, { status: "Link Sent!" });
+                batch.update(jobRef, { status: "Link Sent!", linkSentAt: admin.firestore.FieldValue.serverTimestamp() });
             });
             await batch.commit();
         }
