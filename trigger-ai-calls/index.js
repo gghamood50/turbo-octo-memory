@@ -1,7 +1,29 @@
 const admin = require("firebase-admin");
 const express = require('express');
 const https = require('https');
+const { SecretManagerServiceClient } = require('@google-cloud/secret-manager');
 const app = express();
+
+/**
+ * Fetches the Bland AI API key from Google Cloud Secret Manager.
+ *
+ * @returns {Promise<string>} A promise that resolves with the API key as a string.
+ * @throws {Error} Throws an error if the secret cannot be accessed or found.
+ */
+async function getBlandApiKey() {
+  const name = 'projects/216681158749/secrets/bland-ai-api-key/versions/latest';
+  const client = new SecretManagerServiceClient();
+
+  try {
+    const [version] = await client.accessSecretVersion({ name });
+    const payload = version.payload.data.toString('utf8');
+    return payload;
+  } catch (error) {
+    console.error('Fatal: Could not fetch Bland AI API key from Secret Manager.', error);
+    // Re-throw the error to halt execution, as the key is essential.
+    throw error;
+  }
+}
 
 /**
  * Fetches availability for a given date from the availability-checker service.
