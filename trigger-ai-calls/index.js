@@ -1,3 +1,38 @@
+/**
+ * Prepares the request object for making a call to the Bland AI API.
+ *
+ * @param {string} apiKey - The Bland AI API key.
+ * @param {object} payload - The JSON object containing dynamic variables for the call.
+ * @returns {{body: object, headers: object}} An object containing the request body and headers.
+ * @throws {Error} Throws an error if the API key or payload is missing, or if the phone number is missing from the payload.
+ */
+function prepareBlandAiRequest(apiKey, payload) {
+  if (!apiKey) {
+    throw new Error('API key is required.');
+  }
+  if (!payload) {
+    throw new Error('Payload is required.');
+  }
+  if (!payload.phone_to_call) {
+    throw new Error('Phone number is required in the payload.');
+  }
+
+  const pathwayId = "616618c3-8ddb-4e78-a77f-c84423286886";
+
+  const body = {
+    phone_number: payload.phone_to_call,
+    pathway_id: pathwayId,
+    request_data: payload,
+  };
+
+  const headers = {
+    'Content-Type': 'application/json',
+    'authorization': apiKey,
+  };
+
+  return { body, headers };
+}
+
 const admin = require("firebase-admin");
 const express = require('express');
 const https = require('https');
