@@ -3,6 +3,7 @@
  *
  * @param {string} apiKey - The Bland AI API key.
  * @param {object} payload - The JSON object containing dynamic variables for the call.
+ * @param {string} [payload.voice] - Optional voice for the call. Defaults to "Nat".
  * @returns {{body: object, headers: object}} An object containing the request body and headers.
  * @throws {Error} Throws an error if the API key or payload is missing, or if the phone number is missing from the payload.
  */
@@ -18,12 +19,14 @@ function prepareBlandAiRequest(apiKey, payload) {
   }
 
   const pathwayId = "616618c3-8ddb-4e78-a77f-c84423286886";
+  const voice = payload.voice || "Nat";
 
   const body = {
     phone_number: payload.phone_to_call,
     pathway_id: pathwayId,
     webhook: 'https://bland-ai-webhook-216681158749.us-central1.run.app',
     request_data: payload,
+    voice,
   };
 
   const headers = {
@@ -31,6 +34,7 @@ function prepareBlandAiRequest(apiKey, payload) {
     'authorization': apiKey,
   };
 
+  console.log(`[Bland] Using voice: ${voice}`);
   return { body, headers };
 }
 
