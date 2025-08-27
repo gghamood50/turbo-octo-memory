@@ -83,6 +83,9 @@
                     <a class="nav-link text-slate-700 hover:text-green-700 flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium leading-normal transition-colors" href="#" data-target="daniel">
                         <span class="material-icons-outlined text-xl">smart_toy</span>Daniel (AI)
                     </a>
+                    <a class="nav-link text-slate-700 hover:text-green-700 flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium leading-normal transition-colors" href="#" data-target="performance">
+                        <span class="material-icons-outlined text-xl">rocket_launch</span>Performance
+                    </a>
                     <a class="nav-link text-slate-700 hover:text-green-700 flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium leading-normal transition-colors" href="#" data-target="settings">
                         <span class="material-icons-outlined text-xl">settings</span>Settings
                     </a>
@@ -468,6 +471,70 @@
                                 <input type="text" id="chatInput" class="chat-input" placeholder="Type your question here...">
                                 <button id="sendChatButton" class="chat-send-btn">
                                     <span class="material-icons-outlined text-lg">send</span>
+                                </button>
+                            </div>
+                        </div>
+                    </section>
+                    <section id="performance" class="content-section hidden">
+                        <div class="flex flex-col items-start justify-between gap-2 md:flex-row md:items-center">
+                            <div>
+                                <h1 class="text-slate-900 text-3xl font-bold leading-tight tracking-tight">Performance</h1>
+                                <p class="text-slate-600 text-base font-normal leading-normal">Time savings for this CRM will be calculated here.</p>
+                            </div>
+                             <!-- Filter Button & Pop-up Container -->
+                            <div class="relative">
+                                <button id="performance-dateFilterToggle" class="date-filter-btn flex items-center gap-2">
+                                    <span class="material-icons-outlined text-xl">filter_list</span>
+                                    <span id="performance-activeFilterDisplay">All Time</span>
+                                </button>
+                                <div id="performance-dateFilterPopup" class="date-filter-popup">
+                                    <div class="p-4 space-y-4">
+                                        <div>
+                                            <p class="text-sm font-semibold text-slate-600 mb-2">Quick Ranges</p>
+                                            <div id="performance-date-filter-presets" class="grid grid-cols-2 gap-2">
+                                                <button class="date-filter-btn text-xs" data-range="7">Last 7 Days</button>
+                                                <button class="date-filter-btn text-xs" data-range="30">Last 30 Days</button>
+                                                <button class="date-filter-btn text-xs" data-range="365">Last Year</button>
+                                                <button class="date-filter-btn text-xs active" data-range="all">All Time</button>
+                                            </div>
+                                        </div>
+                                        <hr/>
+                                        <div>
+                                            <p class="text-sm font-semibold text-slate-600 mb-2">Custom Range</p>
+                                            <div class="space-y-2">
+                                                <div class="flex items-center gap-2 text-sm"><label for="performance-dateFrom" class="w-12">From:</label><input type="date" id="performance-dateFrom" class="form-input text-sm p-1.5 rounded-md border-slate-300 w-full"></div>
+                                                <div class="flex items-center gap-2 text-sm"><label for="performance-dateTo" class="w-12">To:</label><input type="date" id="performance-dateTo" class="form-input text-sm p-1.5 rounded-md border-slate-300 w-full"></div>
+                                                <button id="performance-applyDateRange" class="date-filter-btn bg-green-600 text-white w-full mt-2">Apply</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Stat cards -->
+                        <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-2 mt-6">
+                            <div class="stat-card-stitch">
+                                <div class="flex items-center justify-between">
+                                    <p class="text-slate-700 text-base font-medium leading-normal">Dispatcher Time Savings</p>
+                                    <span class="material-icons-outlined text-xl text-sky-500">speed</span>
+                                </div>
+                                <p class="text-slate-900 text-4xl font-bold leading-tight tracking-tight" id="performanceDispatcherTimeSavings">0h 0m</p>
+                            </div>
+                            <div class="stat-card-stitch">
+                                <div class="flex items-center justify-between">
+                                    <p class="text-slate-700 text-base font-medium leading-normal">Technician Time Savings</p>
+                                    <span class="material-icons-outlined text-xl text-green-500">construction</span>
+                                </div>
+                                <p class="text-slate-900 text-4xl font-bold leading-tight tracking-tight" id="performanceTechnicianTimeSavings">0h 0m</p>
+                            </div>
+                        </div>
+
+                        <div class="mt-6 flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+                             <div class="flex justify-between items-center">
+                                <h3 class="text-slate-800 text-lg font-semibold leading-normal">Technician Performance Report</h3>
+                                <button id="getTechnicianPerformanceReportBtn" class="btn-primary-stitch">
+                                    <span class="material-icons-outlined text-lg">download</span>Get Report
                                 </button>
                             </div>
                         </div>
