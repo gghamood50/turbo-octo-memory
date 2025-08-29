@@ -87,7 +87,8 @@ exports.askDaniel = onRequest({ cors: true }, async (req, res) => {
         });
 
         const result = await chat.sendMessage(query);
-        const call = result.response.functionCalls()?.[0];
+        const functionCalls = result.response.functionCalls;
+        const call = functionCalls ? functionCalls[0] : undefined;
 
         if (call) {
             const handler = functionHandlers[call.name];
