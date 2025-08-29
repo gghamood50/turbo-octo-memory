@@ -95,13 +95,13 @@ exports.askDaniel = onRequest({ cors: true }, async (req, res) => {
             if (handler) {
                 const toolResponse = await handler(call.args);
                 const functionResponseResult = await chat.sendMessage([{ functionResponse: { name: call.name, response: toolResponse } }],);
-                const textResponse = functionResponseResult.response.text();
+                const textResponse = functionResponseResult.response.text;
                 res.status(200).send({ response: textResponse });
             } else {
                 res.status(500).send({ message: `Error: AI requested an unknown function: ${call.name}` });
             }
         } else {
-            const textResponse = result.response.text();
+            const textResponse = result.response.text;
             res.status(200).send({ response: textResponse });
         }
     } catch (error) {
