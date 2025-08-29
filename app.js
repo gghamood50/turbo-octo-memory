@@ -3685,6 +3685,13 @@ async function handleConfirmFitInSheet() {
 
 
 // --- Daniel AI Chat Logic ---
+function formatChatMessage(text) {
+    // This regex finds text surrounded by double asterisks and replaces it with <b> tags.
+    // The 'g' flag ensures all occurrences are replaced, not just the first one.
+    // The (.*?) part is a non-greedy capture of any characters between the asterisks.
+    return text.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
+}
+
 function appendToChatLog(message, sender = 'ai', isProcessing = false) {
     if (!chatLog) return;
     const bubble = document.createElement('div');
@@ -3698,7 +3705,7 @@ function appendToChatLog(message, sender = 'ai', isProcessing = false) {
             bubble.classList.add('processing-bubble');
             bubble.innerHTML = `<span class="spinner"></span><span>${message}</span>`;
         } else {
-            bubble.textContent = message;
+            bubble.innerHTML = formatChatMessage(message);
         }
     }
     chatLog.appendChild(bubble);
@@ -3729,13 +3736,13 @@ async function handleDanielAIChat(userInput) {
         if (!response.ok) throw new Error(result.message || 'The AI is currently unavailable.');
         
         processingBubble.classList.remove('processing-bubble');
-        processingBubble.innerHTML = result.response;
+        processingBubble.innerHTML = formatChatMessage(result.response);
         conversationHistory.push({ role: 'model', parts: [{ text: result.response }] });
 
     } catch (error) {
         console.error("Error calling askDaniel function:", error);
         processingBubble.classList.remove('processing-bubble');
-        processingBubble.textContent = `Sorry, I encountered an error: ${error.message}`;
+        processingBubble.innerHTML = formatChatMessage(`Sorry, I encountered an error: ${error.message}`);
     } finally {
         sendChatButton.disabled = false;
         chatInput.disabled = false;
