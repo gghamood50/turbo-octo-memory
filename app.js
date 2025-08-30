@@ -435,7 +435,34 @@ function renderTechnicians(technicians) {
     }).join('');
 }
 
-function renderTripSheets(tripSheets, date) {
+function updateTechnicianCardUI(technicianId) {
+    const sheet = currentTripSheets.find(s => s.technicianId === technicianId);
+    const tech = allTechniciansData.find(t => t.id === technicianId);
+    if (!sheet || !tech) return;
+
+    const jobCount = sheet.route.length;
+    const maxJobs = tech.maxJobs || 0;
+
+    const card = document.getElementById(`trip-sheet-${technicianId}`);
+    if (!card) return;
+
+    const countEl = card.querySelector('.text-sm.font-medium.text-slate-500');
+    if (countEl) {
+        countEl.textContent = `${jobCount} / ${maxJobs} Jobs`;
+    }
+
+    const warningContainer = document.getElementById(`capacity-warning-${technicianId}`);
+    const warningMessageEl = warningContainer.querySelector('.warning-message');
+
+    if (jobCount > maxJobs) {
+        warningMessageEl.textContent = 'Capacity Exceeded!';
+        warningContainer.classList.remove('hidden');
+    } else {
+        warningContainer.classList.add('hidden');
+    }
+}
+
+function renderTripSheets(tripSheets, date, isApproved = false) {
     currentTripSheets = tripSheets;
     if (!tripSheetsContainer) return;
 
@@ -447,48 +474,129 @@ function renderTripSheets(tripSheets, date) {
         return;
     }
 
-    let html = '';
-    let isAnyJobNotApproved = false;
-
-    const jobIdsInSheets = new Set(tripSheets.flatMap(sheet => sheet.route.map(job => job.id)));
-    const liveJobs = allJobsData.filter(job => jobIdsInSheets.has(job.id));
-
-    liveJobs.forEach(job => {
-        if (job.status === 'Scheduled') {
-            isAnyJobNotApproved = true;
-        }
-    });
-
+    let html = '<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">';
+    
     tripSheets.forEach(sheet => {
         const avatarChar = sheet.technicianName ? sheet.technicianName.charAt(0).toUpperCase() : 'T';
+        const tech = allTechniciansData.find(t => t.id === sheet.technicianId);
+        const jobCount = sheet.route.length;
+        const maxJobs = tech ? tech.maxJobs : 'N/A';
+
         html += `
-        <div class="p-4 bg-green-50 border border-green-200 rounded-lg">
-            <h4 class="font-semibold text-green-700 text-md mb-2 flex items-center">
-                <div class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-8 border-2 border-white shadow-sm mr-2" style='background-image: url("https://placehold.co/40x40/059669/FFFFFF?text=${avatarChar}");'></div>
-                ${sheet.technicianName}'s Route
+        <div class="p-4 bg-slate-50 border border-slate-200 rounded-lg trip-sheet-card" id="trip-sheet-${sheet.technicianId}" data-technician-id="${sheet.technicianId}">
+            <h4 class="font-semibold text-slate-800 text-lg mb-3 flex items-center justify-between">
+                <div class="flex items-center">
+                    <div class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10 border-2 border-white shadow-sm mr-3" style='background-image: url("https://placehold.co/40x40/059669/FFFFFF?text=${avatarChar}");'></div>
+                    <span>${sheet.technicianName}</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-sm font-medium text-slate-500 bg-slate-200 px-2 py-1 rounded-md">${jobCount} / ${maxJobs} Jobs</span>
+                    <div id="capacity-warning-${sheet.technicianId}" class="text-xs font-medium text-amber-600 bg-amber-100 px-2 py-1 rounded-md flex items-center hidden">
+                        <span class="material-icons-outlined text-sm mr-1">warning</span>
+                        <span class="warning-message"></span>
+                    </div>
+                </div>
             </h4>
-            <ol class="list-decimal list-inside text-sm text-slate-700 space-y-2 pl-2">
+            <div class="tech-route-container space-y-2 min-h-[100px]" data-technician-id="${sheet.technicianId}">
                 ${sheet.route.map(job => `
-                    <li>
-                        <span class="font-semibold">${job.timeSlot}</span> - ${job.address}
-                        <br>
-                        <span class="text-xs text-slate-600">(${job.customer} - ${job.issue})</span>
-                    </li>
+                    <div class="job-card p-3 border bg-white rounded-lg shadow-sm ${isApproved ? 'cursor-default' : 'cursor-grab'}" data-job-id="${job.id}">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <p class="font-semibold text-sm text-slate-800">${job.address}</p>
+                                <p class="text-xs text-slate-600">${job.customer} - ${job.issue}</p>
+                            </div>
+                            ${isApproved ? '' : `
+                            <button class="unschedule-btn text-slate-400 hover:text-red-500 transition-colors" data-job-id="${job.id}" data-technician-id="${sheet.technicianId}" title="Unschedule Job">
+                                <span class="material-icons-outlined text-base">event_busy</span>
+                            </button>
+                            `}
+                        </div>
+                        <div class="mt-2 pt-2 border-t border-slate-100">
+                            <span class="text-xs font-medium bg-blue-100 text-blue-700 px-2 py-1 rounded-full">${job.timeSlot}</span>
+                        </div>
+                    </div>
                 `).join('')}
-            </ol>
+            </div>
         </div>
         `;
     });
+    html += '</div>'; // Close the grid
     tripSheetsContainer.innerHTML = html;
 
-    if (isAnyJobNotApproved) {
-        tripSheetApprovalContainer.classList.remove('hidden');
-        approveTripSheetsBtn.disabled = false;
-        approveTripSheetsBtn.innerHTML = `<span class="material-icons-outlined">check_circle</span>Approve Trip Sheets`;
-    } else {
+    if (isApproved) {
         tripSheetApprovalContainer.classList.remove('hidden');
         approveTripSheetsBtn.disabled = true;
         approveTripSheetsBtn.innerHTML = `<span class="material-icons-outlined">check_circle_outline</span>Sheets Approved`;
+    } else {
+        tripSheetApprovalContainer.classList.remove('hidden');
+        approveTripSheetsBtn.disabled = false;
+        approveTripSheetsBtn.innerHTML = `<span class="material-icons-outlined">check_circle</span>Approve Trip Sheets`;
+    }
+
+    // Initialize SortableJS only if the sheets are not approved
+    if (!isApproved) {
+        const containers = document.querySelectorAll('.tech-route-container');
+        containers.forEach(container => {
+            new Sortable(container, {
+                group: 'trip-sheets',
+                animation: 150,
+                handle: '.job-card',
+                onEnd: async (evt) => {
+                    const jobId = evt.item.dataset.jobId;
+                    const fromTechnicianId = evt.from.dataset.technicianId;
+                    const toTechnicianId = evt.to.dataset.technicianId;
+                    const newIndex = evt.newIndex;
+                    const oldIndex = evt.oldIndex;
+
+                    const sourceSheet = currentTripSheets.find(s => s.technicianId === fromTechnicianId);
+                    const destinationSheet = currentTripSheets.find(s => s.technicianId === toTechnicianId);
+                    
+                    if (!sourceSheet || !destinationSheet) {
+                        console.error("Could not find trip sheets for drag operation.");
+                        return;
+                    }
+
+                    const jobToMove = sourceSheet.route.find(j => j.id === jobId);
+                    if (!jobToMove) {
+                         console.error("Could not find job to move in local state.");
+                         evt.from.insertBefore(evt.item, evt.from.children[oldIndex]);
+                         return;
+                    }
+                    
+                    const jobIndexInSource = sourceSheet.route.findIndex(j => j.id === jobId);
+                    sourceSheet.route.splice(jobIndexInSource, 1);
+                    destinationSheet.route.splice(newIndex, 0, jobToMove);
+
+                    try {
+                        const batch = db.batch();
+                        const date = tripSheetDateInput.value;
+                        
+                        const sourceSheetRef = db.collection('previewTripSheets').doc(`${date}_${fromTechnicianId}`);
+                        batch.update(sourceSheetRef, { route: sourceSheet.route });
+
+                        if (fromTechnicianId !== toTechnicianId) {
+                            const destinationSheetRef = db.collection('previewTripSheets').doc(`${date}_${toTechnicianId}`);
+                            batch.update(destinationSheetRef, { route: destinationSheet.route });
+                        }
+
+                        await batch.commit();
+                        
+                        updateTechnicianCardUI(fromTechnicianId);
+                        if (fromTechnicianId !== toTechnicianId) {
+                            updateTechnicianCardUI(toTechnicianId);
+                        }
+
+                    } catch (error) {
+                        console.error("Error updating trip sheets after drag:", error);
+                        showMessage("Error saving changes. Reverting.", "error");
+
+                        const [revertedJob] = destinationSheet.route.splice(newIndex, 1);
+                        sourceSheet.route.splice(jobIndexInSource, 0, revertedJob);
+                        evt.from.insertBefore(evt.item, evt.from.children[oldIndex]);
+                    }
+                }
+            });
+        });
     }
 }
 
@@ -1063,10 +1171,7 @@ function renderWorkerPwaView(jobs, technicianName) {
         return;
     }
 
-    const timeSlotOrder = { "8am to 2pm": 1, "9am to 4pm": 2, "12pm to 6pm": 3 };
-    const sortedJobs = [...jobs].sort((a, b) => (timeSlotOrder[a.timeSlot] || 99) - (timeSlotOrder[b.timeSlot] || 99));
-
-    workerTodaysRouteEl.innerHTML = sortedJobs.map(job => {
+    workerTodaysRouteEl.innerHTML = jobs.map(job => {
         if (job.status && job.status.startsWith('Rescheduled by')) {
             return `
         <div class="flex items-center gap-4 bg-slate-50 px-4 min-h-[72px] py-3 justify-between border-b border-slate-100 opacity-60">
@@ -1784,7 +1889,23 @@ async function fetchAndRenderJobsForDate(date, technicianId, technicianName) {
         const snapshot = await jobsQuery.get();
         const assignedJobs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         
-        renderWorkerPwaView(assignedJobs, technicianName);
+        // Step 2: Fetch the trip sheet to get the correct order
+        const tripSheetId = `${dateString}_${technicianId}`;
+        const tripSheetRef = db.collection("tripSheets").doc(tripSheetId);
+        const sheetDoc = await tripSheetRef.get();
+
+        if (sheetDoc.exists) {
+            const sheetData = sheetDoc.data();
+            const orderedJobIds = sheetData.route.map(j => j.id);
+
+            const jobsById = new Map(assignedJobs.map(job => [job.id, job]));
+            const correctlyOrderedJobs = orderedJobIds.map(id => jobsById.get(id)).filter(Boolean);
+            
+            renderWorkerPwaView(correctlyOrderedJobs, technicianName);
+        } else {
+            // No trip sheet, render in default order
+            renderWorkerPwaView(assignedJobs, technicianName);
+        }
 
     } catch (error) {
         console.error(`Error fetching jobs for date ${dateString}:`, error);
@@ -1811,10 +1932,28 @@ function listenForWorkerJobs(technicianId, technicianName) {
         .where("assignedTechnicianId", "==", technicianId)
         .where("scheduledDate", "==", todayDateString);
 
-    workerJobsListener = jobsQuery.onSnapshot((snapshot) => {
+    workerJobsListener = jobsQuery.onSnapshot(async (snapshot) => {
         const assignedJobs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        currentWorkerAssignedJobs = assignedJobs;
-        renderWorkerPwaView(assignedJobs, technicianName);
+        
+        // Step 2: Fetch the trip sheet to get the correct order
+        const tripSheetId = `${todayDateString}_${technicianId}`;
+        const tripSheetRef = db.collection("tripSheets").doc(tripSheetId);
+        const sheetDoc = await tripSheetRef.get();
+
+        if (sheetDoc.exists) {
+            const sheetData = sheetDoc.data();
+            const orderedJobIds = sheetData.route.map(j => j.id);
+
+            const jobsById = new Map(assignedJobs.map(job => [job.id, job]));
+            const correctlyOrderedJobs = orderedJobIds.map(id => jobsById.get(id)).filter(Boolean);
+            
+            currentWorkerAssignedJobs = correctlyOrderedJobs;
+            renderWorkerPwaView(correctlyOrderedJobs, technicianName);
+        } else {
+            // No trip sheet, render in default order
+            currentWorkerAssignedJobs = assignedJobs;
+            renderWorkerPwaView(assignedJobs, technicianName);
+        }
     }, (error) => {
         console.error(`Error listening for jobs for technician ${technicianId}:`, error);
         if (workerTodaysRouteEl) {
@@ -2719,6 +2858,57 @@ if(saveInvoiceBtn) {
             const invoiceId = viewInvoiceBtn.dataset.id;
             openInvoiceViewModal(invoiceId);
         }
+
+        // Unschedule button on trip sheets
+        const unscheduleBtn = event.target.closest('.unschedule-btn');
+        if (unscheduleBtn) {
+            const jobId = unscheduleBtn.dataset.jobId;
+            const technicianId = unscheduleBtn.dataset.technicianId;
+            const jobCard = unscheduleBtn.closest('.job-card');
+            const jobAddress = jobCard.querySelector('.font-semibold').textContent;
+
+            showConfirmationModal(
+                'Confirm Unschedule',
+                `Are you sure you want to remove the job at "${jobAddress}" from this trip sheet? It will be moved back to "Needs Scheduling".`,
+                async () => {
+                    try {
+                        const batch = db.batch();
+                        const date = tripSheetDateInput.value;
+
+                        // 1. Update previewTripSheet: remove the job from the route
+                        const sheet = currentTripSheets.find(s => s.technicianId === technicianId);
+                        if (!sheet) throw new Error("Could not find the trip sheet data.");
+                        
+                        const newRoute = sheet.route.filter(j => j.id !== jobId);
+                        const sheetRef = db.collection('previewTripSheets').doc(`${date}_${technicianId}`);
+                        batch.update(sheetRef, { route: newRoute });
+
+                        // 2. Update the job's status
+                        const jobRef = db.collection('jobs').doc(jobId);
+                        batch.update(jobRef, {
+                            status: 'Needs Scheduling',
+                            assignedTechnicianId: firebase.firestore.FieldValue.delete(),
+                            assignedTechnicianName: firebase.firestore.FieldValue.delete()
+                        });
+
+                        await batch.commit();
+
+                        // Update local state to match
+                        sheet.route = newRoute;
+
+                        // Update UI
+                        jobCard.remove();
+                        updateTechnicianCardUI(technicianId);
+                        
+                        showMessage('Job has been unscheduled.', 'success');
+
+                    } catch (error) {
+                        console.error("Error unscheduling job:", error);
+                        showMessage(`Failed to unschedule job: ${error.message}`, 'error');
+                    }
+                }
+            );
+        }
     });
 
     const modalWarrantyInvoicesContainer = document.getElementById('modalWarrantyInvoicesContainer');
@@ -3547,7 +3737,7 @@ function loadTripSheetsForDate(dateString) {
         if (!previewSnapshot.empty) {
             // If we find sheets in the preview collection, we display them for approval.
             const sheets = previewSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            renderTripSheets(sheets, dateString);
+            renderTripSheets(sheets, dateString, false); // Not approved
         } else {
             // If the preview collection is empty, we fall back to checking the main collection
             // for already-approved sheets for that day.
@@ -3556,7 +3746,7 @@ function loadTripSheetsForDate(dateString) {
                 // Another guard to ensure the date/view hasn't changed during the async fetch
                 if (currentView === 'schedule' && tripSheetDateInput.value === dateString) {
                     const sheets = approvedSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    renderTripSheets(sheets, dateString);
+                    renderTripSheets(sheets, dateString, true); // Approved
                 }
             }).catch(error => {
                 console.error(`Error getting approved trip sheets for ${dateString}:`, error);
