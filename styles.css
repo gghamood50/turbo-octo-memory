@@ -980,3 +980,7 @@ body {
     transition: all 0.2s ease-in-out;
     border: 1px solid #e2e8f0;
 }
+
+.tooltip-wrapper {
+    display: inline-block;
+}
