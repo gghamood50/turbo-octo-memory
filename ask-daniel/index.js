@@ -1,29 +1,38 @@
 "use strict";
 
 /**
- * SafewayOS — Daniel (Tour Guide)
- * - Express on Cloud Run
- * - CORS: open to all (no auth)
- * - Vertex Gemini 2.5 Pro with your Mega Prompt as the system instruction
- *
- * Behavior:
- * - Single /ask endpoint for chat.
- * - Health check at GET /.
- * - No Firestore/tools; pure guided Q&A from the Admin panel POV per mega prompt.
+ * Daniel — Conversational Chatbot (Cloud Run / Express) + Short-Term Memory
+ * - CORS open, no auth
+ * - Accepts: JSON {message|query|text|prompt} or GET /ask?q=hello
+ * - Optional Functions-Framework entry point: "askDaniel"
+ * - NEW: Ephemeral per-session memory (in-memory, TTL, capped turns)
  */
 
 const express = require("express");
 const cors = require("cors");
+const crypto = require("crypto");
 const { VertexAI } = require("@google-cloud/vertexai");
+let functions;
+try {
+  // Optional; only used if you set Cloud Run "Function entry point" to askDaniel
+  functions = require("@google-cloud/functions-framework");
+} catch (_) { /* optional */ }
 
 // ---------------------- ENV ----------------------
 const PORT = process.env.PORT || 8080;
-const PROJECT_ID =
-  process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT || "";
+const PROJECT_ID = process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT || "";
 const VERTEX_LOCATION = process.env.VERTEX_LOCATION || "us-central1";
+const MODEL = process.env.MODEL || "gemini-2.5-pro";
+const TEMPERATURE = Number(process.env.TEMPERATURE ?? 1);
+const MAX_TOKENS = Number(process.env.MAX_TOKENS ?? 30000);
 
-// ---------------------- SYSTEM INSTRUCTION (MEGA PROMPT) ----------------------
-const MEGA_PROMPT = `
+// Short-term memory controls
+const MAX_HISTORY_TURNS = Number(process.env.MAX_HISTORY_TURNS ?? 12); // total turns kept (user+assistant)
+const MEMORY_TTL_MS = Number(process.env.MEMORY_TTL_MS ?? 30 * 60 * 1000); // 30 minutes default
+const MEMORY_SWEEP_MS = Number(process.env.MEMORY_SWEEP_MS ?? 5 * 60 * 1000); // sweep every 5 min
+
+// ---------------------- SYSTEM PROMPT ----------------------
+const SYSTEM_PROMPT = `
 ###ROLE###
 You’re an AI assistant in an automation system named SafewayOS, this system is made for a Garage Door repair and service company named “Safeway Garage Doors” based in Santa ana California, your sole purpose is to guide whoever chats with you across the app, like a guide, using the context and sections of the app im going to provide you with.
 ###PERSONALITY###
@@ -102,10 +111,9 @@ There’s no settings as of now.
 -You must only reply and guide based on what the user asked using the data above.
 -If asked about areas marked “you don't have enough training data”, say exactly that and offer to navigate elsewhere in the Admin panel.
 -Do not invent features, data, or actions. You only describe where to click and what the UI shows.
--You are Daniel; keep responses short, friendly, and step-by-step when giving directions.
 `;
 
-// ---------------------- INIT ----------------------
+// ---------------------- LLM INIT ----------------------
 const vertexAI =
   PROJECT_ID && VERTEX_LOCATION
     ? new VertexAI({ project: PROJECT_ID, location: VERTEX_LOCATION })
@@ -113,97 +121,261 @@ const vertexAI =
 
 const generativeModel = vertexAI
   ? vertexAI.getGenerativeModel({
-      model: "gemini-2.5-pro",
-      systemInstruction: { role: "system", parts: [{ text: MEGA_PROMPT }] },
+      model: MODEL,
+      systemInstruction: { role: "system", parts: [{ text: SYSTEM_PROMPT }] },
       generationConfig: {
-        temperature: 0.4,
-        topP: 0.9,
-        maxOutputTokens: 512,
-      },
+        temperature: TEMPERATURE,
+        topP: 0.95,
+        maxOutputTokens: MAX_TOKENS
+      }
     })
   : null;
+
+// ---------------------- SHORT-TERM MEMORY ----------------------
+/**
+ * Ephemeral in-process store:
+ * memory: Map<sessionId, { turns: Array<{role:'user'|'model', parts:[{text:string}] }>, updatedAt:number }>
+ */
+const memory = new Map();
+
+// Sweep out expired sessions periodically
+setInterval(() => {
+  const now = Date.now();
+  for (const [sid, entry] of memory.entries()) {
+    if (now - entry.updatedAt > MEMORY_TTL_MS) memory.delete(sid);
+  }
+}, MEMORY_SWEEP_MS).unref?.();
+
+// Helpers
+function hash(input) {
+  return crypto.createHash("sha1").update(String(input)).digest("hex").slice(0, 16);
+}
+
+function getSessionId(req) {
+  // Prefer explicit session identifiers from client
+  const explicit =
+    req.headers["x-session-id"] ||
+    req.query.sessionId ||
+    req.body?.sessionId;
+  if (explicit && String(explicit).trim()) return String(explicit).trim();
+
+  // Fallback: ephemeral fingerprint from IP + UA (not stable across proxies; use only if needed)
+  const ua = req.headers["user-agent"] || "";
+  const ip = req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.ip || "";
+  return "auto-" + hash(`${ip}|${ua}`);
+}
+
+function getTurnsForSession(sessionId) {
+  const entry = memory.get(sessionId);
+  if (!entry) return [];
+  // Enforce TTL at read time as well
+  if (Date.now() - entry.updatedAt > MEMORY_TTL_MS) {
+    memory.delete(sessionId);
+    return [];
+  }
+  return entry.turns || [];
+}
+
+function pushTurn(sessionId, turn) {
+  const safeText = (turn?.parts?.[0]?.text ?? "").toString();
+  if (!safeText.trim()) return;
+
+  const entry = memory.get(sessionId) || { turns: [], updatedAt: Date.now() };
+  entry.turns.push({ role: turn.role, parts: [{ text: safeText }] });
+
+  // Cap history length (keep the most recent MAX_HISTORY_TURNS)
+  if (entry.turns.length > MAX_HISTORY_TURNS) {
+    entry.turns = entry.turns.slice(-MAX_HISTORY_TURNS);
+  }
+  entry.updatedAt = Date.now();
+  memory.set(sessionId, entry);
+}
+
+function clearMemory(sessionId) {
+  memory.delete(sessionId);
+}
+
+// ---------------------- HELPERS ----------------------
+function normalizeTurn(turn) {
+  if (!turn || typeof turn !== "object") return null;
+  const role = turn.role === "assistant" ? "model" : (turn.role === "model" ? "model" : "user");
+  const text = String(turn.content ?? turn.text ?? "").trim();
+  if (!text) return null;
+  return { role, parts: [{ text }] };
+}
+
+function buildContents({ message, history, sessionTurns }) {
+  const contents = [];
+
+  // 1) include short-term memory (already normalized structure: {role, parts:[{text}]})
+  if (Array.isArray(sessionTurns) && sessionTurns.length) {
+    // Keep only the tail to be extra safe with context size
+    const tail = sessionTurns.slice(-MAX_HISTORY_TURNS);
+    for (const t of tail) {
+      // defensive copy to avoid accidental mutation
+      const role = t.role === "model" ? "model" : "user";
+      const text = String(t.parts?.[0]?.text ?? "").trim();
+      if (text) contents.push({ role, parts: [{ text }] });
+    }
+  }
+
+  // 2) append any client-provided history (optional)
+  if (Array.isArray(history)) {
+    for (const t of history.slice(-10)) {
+      const n = normalizeTurn(t);
+      if (n) contents.push(n);
+    }
+  }
+
+  // 3) current user message
+  contents.push({ role: "user", parts: [{ text: String(message) }] });
+
+  // Final safety: hard-cap the total turns included
+  const MAX_TURNS_SENT = Math.max(4, Math.min(24, MAX_HISTORY_TURNS + 4));
+  return contents.slice(-MAX_TURNS_SENT);
+}
+
+function extractMessage(req) {
+  const b = req.body || {};
+  const qs = req.query || {};
+  const candidates = [
+    b.message, b.query, b.text, b.prompt,
+    qs.q, qs.message, qs.query, qs.text, qs.prompt
+  ];
+  for (const c of candidates) {
+    if (typeof c === "string" && c.trim()) return c.trim();
+  }
+  return null;
+}
+
+async function chat({ message, history, sessionId }) {
+  if (!generativeModel) {
+    // Friendly offline fallback
+    if (!message) return "Hi! I’m Daniel. Ask me anything.";
+    if (/^(hi|hello|hey)\b/i.test(message)) return "Hey! How can I help today?";
+    return "I’m here, but the AI model isn’t configured in this environment. Enable Vertex AI for full answers.";
+  }
+
+  try {
+    const sessionTurns = getTurnsForSession(sessionId);
+    const req = { contents: buildContents({ message, history, sessionTurns }) };
+    const resp = await generativeModel.generateContent(req);
+    const cand = resp?.response?.candidates?.[0];
+    const text = cand?.content?.parts?.map(p => p.text).filter(Boolean).join("\n").trim()
+      || "Hmm, I didn’t get that. Could you rephrase?";
+
+    // Update short-term memory: user message + assistant reply
+    pushTurn(sessionId, { role: "user", parts: [{ text: String(message) }] });
+    pushTurn(sessionId, { role: "model", parts: [{ text }] });
+
+    return text;
+  } catch (e) {
+    console.error("[Gemini error]", e?.message || e);
+    return "I hit an issue generating a response. Please try again.";
+  }
+}
 
 // ---------------------- APP ----------------------
 const app = express();
 
-// Open CORS (no auth)
+// CORS: open
 app.use((req, res, next) => {
-  res.setHeader("Access-Control-Allow-Origin", "*"); // allow all
+  res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Session-Id");
   res.setHeader("Access-Control-Max-Age", "86400");
   next();
 });
 app.use(cors({ origin: true }));
 app.use(express.json({ limit: "2mb" }));
-app.options("*", (req, res) => res.status(204).send(""));
+app.options("*", (_req, res) => res.status(204).send(""));
 
-app.get("/", (req, res) =>
-  res.type("text/plain").send("safewayos-daniel-guide up")
+app.get("/", (_req, res) => res.type("text/plain").send("ask-daniel chatbot up"));
+
+app.get("/debug", (req, res) =>
+  res.json({
+    projectDetected: Boolean(PROJECT_ID),
+    vertexLocation: VERTEX_LOCATION,
+    model: MODEL,
+    geminiReady: Boolean(generativeModel),
+    memory: {
+      sessions: memory.size,
+      maxHistoryTurns: MAX_HISTORY_TURNS,
+      ttlMs: MEMORY_TTL_MS,
+      note: "Ephemeral in-process memory, per-session (see X-Session-Id)."
+    }
+  })
 );
 
-// ---------------------- UTIL ----------------------
-const toStr = (v) => (v === undefined || v === null ? "" : String(v));
+// Memory admin: clear this session
+app.post("/memory/clear", (req, res) => {
+  const sid = getSessionId(req);
+  clearMemory(sid);
+  res.json({ ok: true, cleared: sid });
+});
 
-function buildContents({ query, history }) {
-  const contents = [];
+// Memory peek (dev only): last few turns for this session (no secrets, just texts)
+app.get("/memory/debug", (req, res) => {
+  const sid = getSessionId(req);
+  const turns = getTurnsForSession(sid).map(t => ({
+    role: t.role,
+    text: t.parts?.[0]?.text ?? ""
+  }));
+  res.json({ sessionId: sid, turns });
+});
 
-  // Short sliding window of prior turns (optional)
-  if (Array.isArray(history)) {
-    for (const turn of history.slice(-8)) {
-      if (!turn || !turn.role || !turn.content) continue;
-      const role = turn.role === "assistant" ? "model" : "user";
-      contents.push({ role, parts: [{ text: toStr(turn.content) }] });
-    }
-  }
+// Quick browser test: /ask?q=hello
+app.get("/ask", async (req, res) => {
+  const msg = extractMessage(req);
+  if (!msg) return res.status(400).json({ message: "Pass ?q=hello (or POST JSON with message/query/text/prompt)" });
 
-  // Current user query
-  contents.push({ role: "user", parts: [{ text: toStr(query) }] });
-  return contents;
-}
+  // Optional: allow dropping memory via query ?dropMemory=1
+  if (String(req.query.dropMemory ?? "") === "1") clearMemory(getSessionId(req));
 
-async function runGuideAgent({ query, history = [] }) {
-  // Fallback if Vertex not configured
-  if (!generativeModel) {
-    return (
-      "Hi, I’m Daniel. I can guide you through the Admin panel.\n" +
-      "Try: “Where do I reschedule a job?” or “What does the Technicians tab do?”"
-    );
-  }
+  const response = await chat({
+    message: msg,
+    history: [],
+    sessionId: getSessionId(req)
+  });
+  res.json({ response, mode: "chat:get" });
+});
 
-  const req = { contents: buildContents({ query, history }) };
-  const resp = await generativeModel.generateContent(req);
-  const cand = resp?.response?.candidates?.[0];
-
-  if (!cand || !cand.content?.parts?.length) {
-    return "I’m here. Ask me about any Admin tab and I’ll guide you step-by-step.";
-  }
-  return cand.content.parts.map((p) => p.text).filter(Boolean).join("\n").trim();
-}
-
-// ---------------------- ROUTES ----------------------
-app.post(["/", "/ask"], async (req, res) => {
+// Main chat endpoint (POST)
+app.post(["/", "/ask", "/ask-daniel"], async (req, res) => {
   try {
-    const { query, history } = req.body || {};
-    if (!query || typeof query !== "string") {
+    const message = extractMessage(req);
+    const history = Array.isArray(req.body?.history) ? req.body.history : [];
+
+    if (!message) {
       return res.status(400).json({
-        message: "Invalid request: 'query' (string) is required.",
-        details: { got: req.body },
+        message: "Invalid request: provide 'message' (string) in JSON body or use ?q= in the URL.",
+        examples: [{ message: "hello there" }, { query: "hello there" }, "/ask?q=hello%20there" ]
       });
     }
 
-    const response = await runGuideAgent({ query, history });
-    return res.json({ response, mode: "guide" });
+    // Optional: dropMemory via body
+    if (req.body?.dropMemory === true || req.body?.dropMemory === "true") {
+      clearMemory(getSessionId(req));
+    }
+
+    const response = await chat({
+      message,
+      history,
+      sessionId: getSessionId(req)
+    });
+    return res.json({ response, mode: "chat" });
   } catch (err) {
     console.error("POST /ask error:", err);
-    return res.status(500).json({
-      message: "Internal error",
-      details: err?.message || String(err),
-    });
+    return res.status(500).json({ message: "Internal error", details: err?.message || String(err) });
   }
 });
 
-// ---------------------- START ----------------------
-app.listen(PORT, () => {
-  console.log(`safewayos-daniel-guide listening on :${PORT}`);
-});
+// Start HTTP server unless Functions-Framework is steering execution
+if (!process.env.GOOGLE_FUNCTION_TARGET && !process.env.FUNCTION_TARGET) {
+  app.listen(PORT, () => console.log(`ask-daniel chatbot listening on :${PORT}`));
+}
+
+// Optional Functions-Framework export (entry point name: askDaniel)
+if (functions && typeof functions.http === "function") {
+  functions.http("askDaniel", app);
+}
