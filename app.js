@@ -21,6 +21,7 @@ let inventoryItemsData = [];
 let currentTripSheets = [];
 let currentView = 'dashboard';
 let conversationHistory = [];
+let currentChatMode = 'tour_guide';
 let currentTripSheetListener = null;
 let workerJobsListener = null; // Listener for the worker's specific jobs
 let currentWorkerAssignedJobs = []; // To store jobs for the current worker view
@@ -1819,10 +1820,31 @@ function listenForWorkerJobs(technicianId, technicianName) {
     });
 }
 
-    if (activateEmailBtn && emailWritingPopup) {
+    const tourGuidePopup = document.getElementById('tour-guide-popup');
+
+    if (activateEmailBtn && emailWritingPopup && tourGuidePopup) {
         activateEmailBtn.addEventListener('click', (e) => {
             e.stopPropagation();
-            emailWritingPopup.classList.toggle('is-visible');
+            if (currentChatMode === 'tour_guide') {
+                emailWritingPopup.style.display = 'flex';
+                tourGuidePopup.style.display = 'none';
+                emailWritingPopup.classList.toggle('is-visible');
+            } else {
+                tourGuidePopup.style.display = 'flex';
+                emailWritingPopup.style.display = 'none';
+                tourGuidePopup.classList.toggle('is-visible');
+            }
+        });
+
+        emailWritingPopup.addEventListener('click', () => {
+            activateEmailWritingMode();
+        });
+
+        tourGuidePopup.addEventListener('click', () => {
+            clearBackendChatMemory();
+            initializeDanielAIChat();
+            activateEmailBtn.innerHTML = `<i class="fas fa-plus"></i>`;
+            tourGuidePopup.classList.remove('is-visible');
         });
     }
 
@@ -1830,6 +1852,11 @@ function listenForWorkerJobs(technicianId, technicianName) {
         if (emailWritingPopup && emailWritingPopup.classList.contains('is-visible')) {
             if (!emailWritingPopup.contains(e.target) && !activateEmailBtn.contains(e.target)) {
                 emailWritingPopup.classList.remove('is-visible');
+            }
+        }
+        if (tourGuidePopup && tourGuidePopup.classList.contains('is-visible')) {
+            if (!tourGuidePopup.contains(e.target) && !activateEmailBtn.contains(e.target)) {
+                tourGuidePopup.classList.remove('is-visible');
             }
         }
     });
@@ -3750,20 +3777,51 @@ async function handleDanielAIChat(userInput) {
             body: JSON.stringify({ 
                 query: userInput,
                 history: conversationHistory.slice(0, -1),
-                view: currentView 
+                view: currentView,
+                mode: currentChatMode
             })
         });
 
         const result = await response.json();
         if (!response.ok) throw new Error(result.message || 'The AI is currently unavailable.');
         
+        // --- MODIFIED LOGIC FOR COPY BUTTON ---
+        processingBubble.innerHTML = ''; // Clear "thinking..." message
         processingBubble.classList.remove('processing-bubble');
-        processingBubble.innerHTML = formatChatMessage(result.response);
+        processingBubble.style.display = 'flex';
+        processingBubble.style.alignItems = 'flex-start';
+        processingBubble.style.gap = '10px';
+
+        const messageContent = document.createElement('span');
+        messageContent.style.flexGrow = '1';
+        messageContent.innerHTML = formatChatMessage(result.response);
+
+        const copyButton = document.createElement('button');
+        copyButton.className = 'copy-btn-daniel';
+        copyButton.title = 'Copy message';
+        copyButton.innerHTML = '<i class="fas fa-copy"></i>';
+        copyButton.addEventListener('click', () => {
+            navigator.clipboard.writeText(result.response).then(() => {
+                copyButton.innerHTML = '<i class="fas fa-check"></i>';
+                setTimeout(() => {
+                    copyButton.innerHTML = '<i class="fas fa-copy"></i>';
+                }, 2000);
+            }).catch(err => {
+                console.error('Failed to copy text: ', err);
+            });
+        });
+
+        processingBubble.appendChild(messageContent);
+        processingBubble.appendChild(copyButton);
+        // --- END MODIFIED LOGIC ---
+
         conversationHistory.push({ role: 'model', parts: [{ text: result.response }] });
 
     } catch (error) {
         console.error("Error calling askDaniel function:", error);
         processingBubble.classList.remove('processing-bubble');
+        // Ensure the bubble is not a flex container on error
+        processingBubble.style.display = ''; 
         processingBubble.innerHTML = formatChatMessage(`Sorry, I encountered an error: ${error.message}`);
     } finally {
         sendChatButton.disabled = false;
@@ -3775,6 +3833,8 @@ async function handleDanielAIChat(userInput) {
 
 function initializeDanielAIChat() {
     if (!chatLog || !chatInput || !sendChatButton) return;
+
+    currentChatMode = 'tour_guide';
     
     // Clear previous chat history if any
     chatLog.innerHTML = '';
@@ -3799,6 +3859,42 @@ function initializeDanielAIChat() {
     chatInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') submitQuery();
     });
+}
+
+// --- NEW --- Function to clear chat memory on the backend
+async function clearBackendChatMemory() {
+    try {
+        await fetch(`${ASK_DANIEL_URL}/memory/clear`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ dropMemory: true }) // Body might not be needed depending on server implementation
+        });
+    } catch (error) {
+        console.error("Error clearing backend chat memory:", error);
+    }
+}
+
+// --- NEW --- Function to switch to Email Writing mode
+function activateEmailWritingMode() {
+    currentChatMode = 'email_writing';
+    
+    // 1. Clear chat UI and history
+    chatLog.innerHTML = '';
+    conversationHistory = [];
+    
+    // 2. Clear backend memory
+    clearBackendChatMemory();
+    
+    // 3. Change icon
+    activateEmailBtn.innerHTML = `<i class="fas fa-envelope"></i>`;
+    
+    // 4. Set initial message for email mode
+    const initialMessage = "Email Writing Mode activated. How can I help you draft an email?";
+    appendToChatLog(initialMessage);
+    conversationHistory.push({ role: 'model', parts: [{ text: initialMessage }] });
+
+    // 5. Hide the popup
+    emailWritingPopup.classList.remove('is-visible');
 }
 
 function showMessage(message, type = 'info') {
