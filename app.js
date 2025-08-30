@@ -3689,7 +3689,12 @@ function formatChatMessage(text) {
     // This regex finds text surrounded by double asterisks and replaces it with <b> tags.
     // The 'g' flag ensures all occurrences are replaced, not just the first one.
     // The (.*?) part is a non-greedy capture of any characters between the asterisks.
-    return text.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
+    let formattedText = text.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
+    
+    // Replace newline characters with <br> tags to ensure line breaks are rendered in HTML.
+    formattedText = formattedText.replace(/\n/g, '<br>');
+    
+    return formattedText;
 }
 
 function appendToChatLog(message, sender = 'ai', isProcessing = false) {
