@@ -1,43 +1,111 @@
-// index.js
 "use strict";
 
 /**
- * Ask-Daniel backend — Agent Mode
- * - Express server on Cloud Run
- * - CORS per spec
- * - Vertex Gemini 2.5 Pro with function-calling to tools:
- *     - algoliaFindJobs
- *     - algoliaCountScheduledJobs
- *     - getJobByDispatchNumber
- * - Falls back gracefully if Vertex or Algolia are not configured
+ * SafewayOS — Daniel (Tour Guide)
+ * - Express on Cloud Run
+ * - CORS: open to all (no auth)
+ * - Vertex Gemini 2.5 Pro with your Mega Prompt as the system instruction
+ *
+ * Behavior:
+ * - Single /ask endpoint for chat.
+ * - Health check at GET /.
+ * - No Firestore/tools; pure guided Q&A from the Admin panel POV per mega prompt.
  */
 
 const express = require("express");
 const cors = require("cors");
-const admin = require("firebase-admin");
-const algoliasearch = require("algoliasearch");
 const { VertexAI } = require("@google-cloud/vertexai");
 
 // ---------------------- ENV ----------------------
 const PORT = process.env.PORT || 8080;
-const ALGOLIA_APP_ID = process.env.ALGOLIA_APP_ID || "";
-const ALGOLIA_API_KEY = process.env.ALGOLIA_API_KEY || "";
-const ALGOLIA_INDEX_JOBS = process.env.ALGOLIA_INDEX_JOBS || "jobs";
-const VERTEX_LOCATION = process.env.VERTEX_LOCATION || "us-central1";
 const PROJECT_ID =
   process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT || "";
+const VERTEX_LOCATION = process.env.VERTEX_LOCATION || "us-central1";
+
+// ---------------------- SYSTEM INSTRUCTION (MEGA PROMPT) ----------------------
+const MEGA_PROMPT = `
+###ROLE###
+You’re an AI assistant in an automation system named SafewayOS, this system is made for a Garage Door repair and service company named “Safeway Garage Doors” based in Santa ana California, your sole purpose is to guide whoever chats with you across the app, like a guide, using the context and sections of the app im going to provide you with.
+###PERSONALITY###
+You’re daniel you’re friendly and smart, you should guide the user throughout the admin panel.
+###WHO YOU WILL BE TALKING TO###
+99% Of the time you will either be talking to the owner of the company “Ibaidallah” or the dispatcher (his wife) “Fida”
+Most of the time it will be “Fida”
+###APP GUIDE AND SECTIONS###
+The app consists of two panels, an Admin panel which the dispatcher/owner is talking to you from now, and the Worker panel where the technicians and the owner will be fulfilling jobs from, by creating invoices, If you got a message it means the sender is in the admin panel so lets start with that.
+###ADMIN PANEL###
+The theme here is white mostly and green as a secondary color the navigation bar is up its not a sidebar it is always visible, it consists of 10 sections (tabs).
+###DASHBOARD TAB(ADMIN)###
+Here you can find key metrics which are The number of unscheduled jobs, number of scheduled jobs, Total jobs, and Lifetime trip sheets created, there’s a live map where you can see technicians locations live, and on the right there’s “Latest 5 jobs” section that shows what are the lates 5 jobs.
+###JOBS TAB(ADMIN)###
+Here all the jobs are centralized and managed (Jobs are automatically imported from email), on the top of the page there’s two buttons first one is “Send Scheduling Links” when pressed sends scheduling links via sms to all unscheduled jobs the second button is “Add Job Manually” when pressed it pulls out a modal that you can fill out data in and create a job. under that it shows the capacity of jobs that are possible to take for each time frame in a small violet/purple container named “Scheduling capacity & usage” and under that you can see all the jobs, sorted from newest to oldest, without doing anything you can see the following information on every jobs line:
+A. Customer name
+B. Address
+C. Issue reported
+D. Phone number
+E. Status
+F. Actions (which is the button that opens the modal to manage a job)
+
+As you can see in E there’s Status for each job, here’s the following statuses and what they mean:
+
+A. Needs Scheduling : Means it is probably fresh, this is the earliest status, the action button here says “Schedule Manually” when pressed, there’s various stuff that shows up, which are:
+- Job details section (contains: Customer name, issue reported, Address, Phone number, warranty provider, warranty plan type, PO or dispatch number)
+- Customer Scheduling Link section: here a scheduling link that is supposed to be sent to the customer either manually or automatically via sms appears.
+- Under the scheduling link there’s “Select Date” and “Select Time Slot” when user selects a date and a time slot (Time slots are: 8am-2pm, 9am-4pm, 12pm-6pm) they can press “Confirm Schedule” and like that they manually schedule, without sending a link, there’s another button “Send Scheduling Link Now” this specifically sends the scheduling link, to the specific job.
+
+B. Link Sent! : Means a scheduling link has been sent either via the “Send Scheduling Link Now” or “Send scheduling links” at the top of the page, this status action button is also “Schedule Manually” and it has everything and functions Exactly like the “Needs Scheduling” action button except there’s no “Send scheduling link now” button.
+
+C. Scheduled : Means the job is scheduled for a specific date and time slot and ready to be trip Sheeted, maybe via sms maybe manually maybe via AI call, this status action button says “View/Reschedule” and it only has the Job details section (contains same information as the one in needs scheduling) and the “Select Date” and “Select Time slot” incase dispatcher wanted to reschedule.
+
+D. Awaiting Completion : Means the job has been trip sheeted and assigned to a technician to complete, the action button here says “View Details” and it's exactly like the scheduled modal but there’s an “Assigned to:” place stating which technician got assigned the job
+
+E. Completed : Means the job has been completed because a technician created invoices for this job, the button here says “View Details” and has the job details section and “Assigned to” and a new section named “Associated Invoices” that shows the invoices associated with this job when clicked it opens the invoice modal with all the invoice details
+
+Fit into trip sheet functionality: When someone tries to schedule a job for a day that a trip sheet already has been created for the “Confirm Schedule” button turns into “Fit into trip sheet” and a a manual assignment of technicians is in play and “Fit into trip sheet” is pressed a modal showing  the trip-sheet allowing the dispatcher to manually choose where to put the job.
+
+Note: there’s other statuses that are specific like “AI Call initiated” and “AI Call Failed” “Manual follow up” when asked about these say you don't have enough data on them 
+
+###TECHNICIANS(ADMIN)###
+Here all the technicians are managed there’s a “Add Technician” button when pressed you can add a new one, then under it shows all the technicians in their own cards and each cards has a “manage” button which when pressed a modal pops up allowing you to configure the following data:
+-Technician name
+-Status (offline/online)
+-Starting location
+-End Location
+-Max jobs per day
+###SCHEDULE(ADMIN)###
+Here is where the trip sheets are created and approved, the user selects a date, and presses “Generate Trip Sheets” and all the relevant data (technician statuses, technician locations, job addresses, job time slots) are sent to a backend function and using Google’s smart “Route Optimization API” it returns an optimized route, and then a “Approve trip sheet” purple button is shown when pressed it finalizes the trip sheet and changes the statuses from “Scheduled” to “Awaiting Completion” and the jobs are sent to the technicians view in the correct order of the trip sheet.
+###INVENTORY(ADMIN)###
+When asked about “Inventory” say you don't have enough training data on it.
+###WARRANTY(ADMIN)###
+Here all the invoices with the invoice type “Warranty” are centralized and managed, First of all on the top you have 4 key metrics which are:
+-Total Invoices
+-Unclaimed Invoices
+-Claimed Invoices
+-Value of Claimed($)
+then under you have all the warranty providers in cards with their name on it (First american, Home Guard etc) and when pressed they all have different processes to automate claiming, if asked about the process say you don't have enough training data on it.
+then under the warranty providers you have “Warranty Invoices” section that shows the 5 latest invoices that have warranty type in the same way jobs where shows what you could see is from outside is (Invoice #, Customer name, Date, Type(All are warranty), Total, Status, Actions) the action button here for all invoices is “View Details” when pressed a modal with all the invoices data shows up, and a download PDF button which downloads the pdf of the invoice.
+also the “Warranty Invoices” section has a “View All” Button that transfers user to another screen showing “View Invoices By Technician” that has all the technicians names and a “All technicians” in cards when a specific technician is pressed, it shows the invoices that specific Technician Created and when “All technicians” is pressed it shows all invoices across all technicians, also in the screens where specific technician invoices are shown or All technician invoices are shown, there’s a search bar that you can search to find specific invoices.
+###INVOICES(ADMIN)###
+This section is almost identical to the warranty section, what is different is the key metrics, and there’s no “Warranty Provider” cards section, and here it shows ALL invoices no matter the type Warranty or Customer doesn’t matter they’re all here, the key metrics here are:
+-Total Invoices
+-Warranty Invoices
+-Customer Invoices
+-Total Invoice Value
+###DANIEL (AI)(ADMIN)###
+This is the tab the user is chatting with you from currently it's just a chat with an input field and green send button.
+###PERFORMANCE(ADMIN)###
+Here the CRMs performance is shown and broken down, if asked a more specific question say you don't have enough training data.
+###SETTINGS(ADMIN)###
+There’s no settings as of now.
+
+###INSTRUCTIONS###
+-You must only reply and guide based on what the user asked using the data above.
+-If asked about areas marked “you don't have enough training data”, say exactly that and offer to navigate elsewhere in the Admin panel.
+-Do not invent features, data, or actions. You only describe where to click and what the UI shows.
+-You are Daniel; keep responses short, friendly, and step-by-step when giving directions.
+`;
 
 // ---------------------- INIT ----------------------
-try { admin.initializeApp(); } catch (_) {}
-const db = admin.firestore();
-
-let algoliaClient = null;
-let algoliaJobsIndex = null;
-if (ALGOLIA_APP_ID && ALGOLIA_API_KEY) {
-  algoliaClient = algoliasearch(ALGOLIA_APP_ID, ALGOLIA_API_KEY);
-  algoliaJobsIndex = algoliaClient.initIndex(ALGOLIA_INDEX_JOBS);
-}
-
 const vertexAI =
   PROJECT_ID && VERTEX_LOCATION
     ? new VertexAI({ project: PROJECT_ID, location: VERTEX_LOCATION })
@@ -46,89 +114,21 @@ const vertexAI =
 const generativeModel = vertexAI
   ? vertexAI.getGenerativeModel({
       model: "gemini-2.5-pro",
-      systemInstruction: {
-        role: "system",
-        parts: [
-          {
-            text: [
-              "You are Daniel, a production chatbot for a garage-door service backend.",
-              "Decide when to call tools vs. reply conversationally.",
-              "Use tools for:",
-              "- finding or listing jobs (fuzzy name/phone/address queries) → algoliaFindJobs",
-              "- counts of scheduled jobs → algoliaCountScheduledJobs",
-              "- exact dispatch lookups → getJobByDispatchNumber",
-              "When the user greets or makes small talk, respond briefly and offer how you can help.",
-              "Return short, precise answers. Do not ask unnecessary questions.",
-              "If a tool returns no data, say so and suggest one extra hint (e.g., last 4 digits).",
-              "Classification rules:",
-              " scheduled if status in {scheduled,rescheduled,confirmed,assigned,dispatch assigned,on route} or has a valid scheduled date.",
-              " awaiting completion if status contains that phrase.",
-              " excluded if status in {completed,canceled,cancelled,no show,duplicate,on hold,void,refused,do not service,dns}.",
-            ].join("\n"),
-          },
-        ],
+      systemInstruction: { role: "system", parts: [{ text: MEGA_PROMPT }] },
+      generationConfig: {
+        temperature: 0.4,
+        topP: 0.9,
+        maxOutputTokens: 512,
       },
-      tools: [
-        {
-          functionDeclarations: [
-            {
-              name: "algoliaFindJobs",
-              description:
-                "Fuzzy jobs retrieval by name, phone last-4, address contains, technician, warranty provider, etc.",
-              parameters: {
-                type: "OBJECT",
-                properties: {
-                  name: { type: "STRING" },
-                  dispatchOrPoNumber: { type: "STRING" },
-                  phoneEndsWith: { type: "STRING" },
-                  addressContains: { type: "STRING" },
-                  statusContains: { type: "STRING" },
-                  technician: { type: "STRING" },
-                  warrantyProvider: { type: "STRING" },
-                  timeSlot: { type: "STRING" },
-                  planType: { type: "STRING" },
-                  freeText: { type: "STRING" },
-                  limit: { type: "NUMBER" }
-                }
-              }
-            },
-            {
-              name: "algoliaCountScheduledJobs",
-              description:
-                "Precise scheduled-counts and breakdown by date. Prefer Algolia facets; fallback to Firestore.",
-              parameters: {
-                type: "OBJECT",
-                properties: {
-                  dateFrom: { type: "STRING", description: "YYYY-MM-DD" },
-                  dateTo: { type: "STRING", description: "YYYY-MM-DD" },
-                  futureOnly: { type: "BOOLEAN" }
-                }
-              }
-            },
-            {
-              name: "getJobByDispatchNumber",
-              description:
-                "Exact Firestore lookup by dispatchOrPoNumber; returns authoritative details.",
-              parameters: {
-                type: "OBJECT",
-                properties: {
-                  dispatchOrPoNumber: { type: "STRING" }
-                },
-                required: ["dispatchOrPoNumber"]
-              }
-            }
-          ]
-        }
-      ],
     })
   : null;
 
-// ---------------------- EXPRESS ----------------------
+// ---------------------- APP ----------------------
 const app = express();
 
-// Strict CORS (file:// allowed)
+// Open CORS (no auth)
 app.use((req, res, next) => {
-  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Origin", "*"); // allow all
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
   res.setHeader("Access-Control-Max-Age", "86400");
@@ -138,401 +138,47 @@ app.use(cors({ origin: true }));
 app.use(express.json({ limit: "2mb" }));
 app.options("*", (req, res) => res.status(204).send(""));
 
-app.get("/", (req, res) => res.type("text/plain").send("ask-daniel up"));
+app.get("/", (req, res) =>
+  res.type("text/plain").send("safewayos-daniel-guide up")
+);
 
-// ---------------------- HELPERS ----------------------
+// ---------------------- UTIL ----------------------
 const toStr = (v) => (v === undefined || v === null ? "" : String(v));
-const lower = (s) => toStr(s).toLowerCase();
-const digits = (s) => toStr(s).replace(/\D/g, "");
-const last4 = (s) => digits(s).slice(-4);
 
-const SCHEDULED_SET = new Set([
-  "scheduled",
-  "rescheduled",
-  "confirmed",
-  "assigned",
-  "dispatch assigned",
-  "on route",
-]);
-const EXCLUDED_SET = new Set([
-  "completed",
-  "canceled",
-  "cancelled",
-  "no show",
-  "duplicate",
-  "on hold",
-  "void",
-  "refused",
-  "do not service",
-  "dns",
-]);
-
-function isDateLike(v) {
-  return v && (v._seconds || v instanceof admin.firestore.Timestamp || v instanceof Date || (typeof v === "string" && !Number.isNaN(Date.parse(v))));
-}
-function toISO(v) {
-  try {
-    if (!v) return null;
-    if (v._seconds) return new Date(v._seconds * 1000).toISOString();
-    if (v instanceof admin.firestore.Timestamp) return v.toDate().toISOString();
-    if (v instanceof Date) return v.toISOString();
-    if (typeof v === "string") return new Date(v).toISOString();
-  } catch {}
-  return null;
-}
-function toISODate(v) {
-  const iso = toISO(v);
-  return iso ? iso.slice(0, 10) : null;
-}
-function selectKeyFields(hit) {
-  return {
-    dispatchOrPoNumber: hit.dispatchOrPoNumber ?? hit.dispatch ?? null,
-    customer: hit.customer ?? null,
-    address: hit.address ?? null,
-    phone: hit.phone ?? null,
-    status: hit.status ?? null,
-    createdAt: isDateLike(hit.createdAt) ? toISO(hit.createdAt) : toISO(hit.created_at),
-    scheduledDate: isDateLike(hit.scheduledDate) ? toISO(hit.scheduledDate) : toISO(hit.scheduled_date),
-    assignedTechnicianName: hit.assignedTechnicianName ?? hit.technician ?? null,
-    warrantyProvider: hit.warrantyProvider ?? null,
-    timeSlot: hit.timeSlot ?? null,
-    planType: hit.planType ?? null,
-    scheduledDateISO: hit.scheduledDateISO ?? toISODate(hit.scheduledDate) ?? null,
-    createdAtTimestamp: hit.createdAtTimestamp ?? null,
-  };
-}
-
-// ---------------------- TOOLS ----------------------
-async function algoliaFindJobsTool(args = {}) {
-  console.log("[tool] algoliaFindJobs", JSON.stringify(args));
-  if (!algoliaJobsIndex) {
-    return { error: "Algolia not configured (ALGOLIA_APP_ID/API_KEY missing)." };
-  }
-
-  const {
-    name,
-    dispatchOrPoNumber,
-    phoneEndsWith,
-    addressContains,
-    statusContains,
-    technician,
-    warrantyProvider,
-    timeSlot,
-    planType,
-    freeText,
-    limit = 10,
-  } = args;
-
-  // Pick a base query but avoid junk like "hi"
-  let baseQuery = "";
-  if (dispatchOrPoNumber) baseQuery = toStr(dispatchOrPoNumber);
-  else if (name && name.trim().length >= 1) baseQuery = name.trim();
-  else if (freeText && freeText.trim().length >= 3) baseQuery = freeText.trim();
-  else if (addressContains && addressContains.trim().length >= 3) baseQuery = addressContains.trim();
-  else baseQuery = ""; // empty = match all (facets), but we’ll rely on post-filters
-
-  const hitsWanted = Math.min(Math.max(limit * 4, 50), 200);
-
-  const searchParams = {
-    hitsPerPage: hitsWanted,
-    attributesToRetrieve: [
-      "objectID",
-      "dispatchOrPoNumber",
-      "customer",
-      "address",
-      "phone",
-      "status",
-      "createdAt",
-      "scheduledDate",
-      "assignedTechnicianName",
-      "warrantyProvider",
-      "timeSlot",
-      "planType",
-      "scheduledDateISO",
-      "createdAtTimestamp",
-      "phoneDigits",
-      "phoneLast4",
-    ],
-    attributesToHighlight: [],
-    typoTolerance: "min",
-    removeWordsIfNoResults: "allOptional",
-    ignorePlurals: true,
-    advancedSyntax: true,
-  };
-
-  const res = await algoliaJobsIndex.search(baseQuery, searchParams);
-  let filtered = res.hits || [];
-
-  // Post-filters only if provided (avoid filtering everything out)
-  if (phoneEndsWith) {
-    const suf = toStr(phoneEndsWith).trim();
-    filtered = filtered.filter(
-      (h) =>
-        last4(h.phoneDigits || h.phone || "") === suf ||
-        toStr(h.phoneLast4 || "").endsWith(suf)
-    );
-  }
-  if (addressContains) {
-    const needle = lower(addressContains);
-    filtered = filtered.filter((h) => lower(h.address).includes(needle));
-  }
-  if (statusContains) {
-    const needle = lower(statusContains);
-    filtered = filtered.filter((h) => lower(h.status).includes(needle));
-  }
-  if (technician) {
-    const needle = lower(technician);
-    filtered = filtered.filter((h) =>
-      lower(h.assignedTechnicianName).includes(needle)
-    );
-  }
-  if (warrantyProvider) {
-    const needle = lower(warrantyProvider);
-    filtered = filtered.filter((h) =>
-      lower(h.warrantyProvider).includes(needle)
-    );
-  }
-  if (timeSlot) {
-    const needle = lower(timeSlot);
-    filtered = filtered.filter((h) => lower(h.timeSlot).includes(needle));
-  }
-  if (planType) {
-    const needle = lower(planType);
-    filtered = filtered.filter((h) => lower(h.planType).includes(needle));
-  }
-
-  // Ranking
-  const dp = toStr(dispatchOrPoNumber || "");
-  const nameQ = lower(toStr(name || ""));
-  const addrQ = lower(toStr(addressContains || ""));
-  const phoneQ = toStr(phoneEndsWith || "");
-
-  const scored = filtered.map((h) => {
-    let score = 0;
-    if (dp && toStr(h.dispatchOrPoNumber) === dp) score += 100;
-    if (nameQ) {
-      const nm = lower(toStr(h.customer));
-      if (nm.startsWith(nameQ)) score += 20;
-      else if (nm.includes(nameQ)) score += 10;
-    }
-    if (addrQ && lower(toStr(h.address)).includes(addrQ)) score += 8;
-    if (phoneQ) {
-      const l4 = toStr(h.phoneLast4) || last4(h.phoneDigits || h.phone || "");
-      if (toStr(l4).endsWith(phoneQ)) score += 15;
-    }
-    if (h.createdAtTimestamp) score += Math.min(5, Math.floor((h.createdAtTimestamp % 10000) / 2000));
-    return { score, item: selectKeyFields(h) };
-  });
-
-  scored.sort((a, b) => b.score - a.score);
-  const items = (scored.length ? scored : filtered.map((h) => ({ item: selectKeyFields(h) })))
-    .slice(0, limit)
-    .map((x) => x.item);
-
-  return { items };
-}
-
-async function algoliaCountScheduledJobsTool(args = {}) {
-  console.log("[tool] algoliaCountScheduledJobs", JSON.stringify(args));
-  const { dateFrom, dateTo, futureOnly = false } = args;
-
-  // Prefer Algolia facets if available
-  if (algoliaJobsIndex) {
-    try {
-      const res = await algoliaJobsIndex.search("", {
-        hitsPerPage: 0,
-        facets: ["scheduledDateISO", "statusNormalized"],
-      });
-      if (res?.facets?.scheduledDateISO) {
-        const byDate = [];
-        let total = 0;
-
-        const today = new Date().toISOString().slice(0, 10);
-        for (const [date, countRaw] of Object.entries(res.facets.scheduledDateISO)) {
-          const cnt = Number(countRaw || 0);
-          if (futureOnly && date < today) continue;
-          if (dateFrom && date < dateFrom) continue;
-          if (dateTo && date > dateTo) continue;
-          total += cnt;
-          byDate.push({ date, count: cnt });
-        }
-        byDate.sort((a, b) => (a.date < b.date ? -1 : 1));
-        const awaitingCompletion = Number((res.facets.statusNormalized || {})["awaiting completion"] || 0);
-        const summary = [
-          `${total + awaitingCompletion} in total`,
-          `${awaitingCompletion} awaiting completion`,
-          ...byDate.map((d) => `${d.count} on ${d.date}`),
-        ].join(", ");
-        return { total: total + awaitingCompletion, awaitingCompletion, byDate, summary, source: "algolia-facets" };
-      }
-    } catch (e) {
-      console.warn("[algolia facets] skipped:", e?.message || e);
-    }
-  }
-
-  // Firestore fallback (subset for safety)
-  const jobsCol = db.collection("jobs");
-  const [snapA, snapB] = await Promise.allSettled([
-    jobsCol.where("scheduledDate", ">", new Date("1970-01-01")).get(),
-    jobsCol.where("status", "in", Array.from(SCHEDULED_SET)).get(),
-  ]);
-
-  const map = new Map();
-  const addSnap = (s) => s.forEach((doc) => map.set(doc.id, doc.data()));
-  if (snapA.status === "fulfilled") addSnap(snapA.value);
-  if (snapB.status === "fulfilled") addSnap(snapB.value);
-
-  let awaitingCompletion = 0;
-  let totalScheduled = 0;
-  const byDate = [];
-  const dict = new Map();
-
-  const today = new Date().toISOString().slice(0, 10);
-  for (const data of map.values()) {
-    const status = lower(toStr(data.status));
-    const schedISO = toISODate(data.scheduledDate);
-    const hasDate = !!schedISO;
-    const isAwaiting = status.includes("awaiting completion");
-    const isExcluded = EXCLUDED_SET.has(status);
-
-    if (isAwaiting) awaitingCompletion++;
-    else if (!isExcluded && (SCHEDULED_SET.has(status) || hasDate)) {
-      if (schedISO) {
-        if (futureOnly && schedISO < today) continue;
-        if (dateFrom && schedISO < dateFrom) continue;
-        if (dateTo && schedISO > dateTo) continue;
-        dict.set(schedISO, (dict.get(schedISO) || 0) + 1);
-      }
-      totalScheduled++;
-    }
-  }
-  for (const [date, count] of Array.from(dict.entries()).sort((a, b) =>
-    a[0] < b[0] ? -1 : 1
-  )) byDate.push({ date, count });
-
-  const total = totalScheduled + awaitingCompletion;
-  const summary = [
-    `${total} in total`,
-    `${awaitingCompletion} awaiting completion`,
-    ...byDate.map((d) => `${d.count} on ${d.date}`),
-  ].join(", ");
-  return { total, awaitingCompletion, byDate, summary, source: "firestore-fallback" };
-}
-
-async function getJobByDispatchNumberTool(args = {}) {
-  console.log("[tool] getJobByDispatchNumber", JSON.stringify(args));
-  const { dispatchOrPoNumber } = args || {};
-  if (!dispatchOrPoNumber) return { error: "dispatchOrPoNumber is required" };
-
-  const snap = await db
-    .collection("jobs")
-    .where("dispatchOrPoNumber", "==", dispatchOrPoNumber)
-    .limit(1)
-    .get();
-  if (snap.empty) return { error: `No job found for dispatch ${dispatchOrPoNumber}.` };
-
-  const data = snap.docs[0].data();
-  return {
-    item: {
-      dispatchOrPoNumber: data.dispatchOrPoNumber || null,
-      customer: data.customer || null,
-      address: data.address || null,
-      phone: data.phone || null,
-      status: data.status || null,
-      createdAt: toISO(data.createdAt),
-      scheduledDate: toISO(data.scheduledDate),
-      assignedTechnicianName: data.assignedTechnicianName || null,
-      warrantyProvider: data.warrantyProvider || null,
-      timeSlot: data.timeSlot || null,
-      planType: data.planType || null,
-      id: snap.docs[0].id,
-    },
-  };
-}
-
-// Tool registry (for function-calls)
-const TOOL_IMPL = {
-  algoliaFindJobs: algoliaFindJobsTool,
-  algoliaCountScheduledJobs: algoliaCountScheduledJobsTool,
-  getJobByDispatchNumber: getJobByDispatchNumberTool,
-};
-
-// ---------------------- AGENT LOOP ----------------------
-async function runAgent({ query, history = [] }) {
-  // If Vertex missing, fall back to a simple search behavior
-  if (!generativeModel) {
-    console.warn("[agent] Vertex not configured; falling back.");
-    const { items, error } = await algoliaFindJobsTool({ freeText: query, limit: 10 });
-    if (error) {
-      return `I'm up, but search isn't configured: ${error}`;
-    }
-    if (!items || !items.length) {
-      return "I didn’t find matches. Try adding a hint like the customer’s first name or the phone’s last 4 digits.";
-    }
-    return items
-      .slice(0, 5)
-      .map((it, i) => {
-        const sched = it.scheduledDate ? new Date(it.scheduledDate).toISOString().slice(0, 10) : "-";
-        return `${i + 1}. ${it.dispatchOrPoNumber || "-"} | ${it.customer || "-"} | ${it.address || "-"} | ${it.status || "-"} | scheduled: ${sched}`;
-      })
-      .join("\n");
-  }
-
-  // Build contents: include brief history if provided in shape [{role:'user'|'assistant',content:'...'}]
+function buildContents({ query, history }) {
   const contents = [];
+
+  // Short sliding window of prior turns (optional)
   if (Array.isArray(history)) {
-    for (const turn of history.slice(-6)) {
+    for (const turn of history.slice(-8)) {
       if (!turn || !turn.role || !turn.content) continue;
       const role = turn.role === "assistant" ? "model" : "user";
-      contents.push({ role, parts: [{ text: String(turn.content) }] });
+      contents.push({ role, parts: [{ text: toStr(turn.content) }] });
     }
   }
-  contents.push({ role: "user", parts: [{ text: String(query) }] });
 
-  // Up to 2 tool-call turns (that’s plenty here)
-  let toolResponseParts = [];
-  for (let step = 0; step < 2; step++) {
-    const req = { contents: [...contents, ...toolResponseParts] };
-    const resp = await generativeModel.generateContent(req);
-    const cand = resp?.response?.candidates?.[0];
-    if (!cand) {
-      // No candidate: be graceful
-      return "I’m here. How can I help with jobs? You can say things like: “Find a job for Mohammed on Sylvan” or “How many jobs are scheduled?”.";
-    }
+  // Current user query
+  contents.push({ role: "user", parts: [{ text: toStr(query) }] });
+  return contents;
+}
 
-    const parts = cand.content?.parts || [];
-    const call = parts.find((p) => p.functionCall);
-    if (!call) {
-      // No tool call → return text
-      const text = parts.map((p) => p.text).filter(Boolean).join("\n").trim();
-      return text || "Ready. What should I look up?";
-    }
-
-    // Execute the tool
-    const { name, args } = call.functionCall;
-    console.log(`[agent] functionCall: ${name}(${JSON.stringify(args)})`);
-    const impl = TOOL_IMPL[name];
-    let result;
-    if (!impl) {
-      result = { error: `Unknown tool: ${name}` };
-    } else {
-      try {
-        result = await impl(args || {});
-      } catch (e) {
-        console.error(`[tool:${name}] error`, e);
-        result = { error: e?.message || String(e) };
-      }
-    }
-
-    // Provide the functionResponse back to model to format final answer
-    toolResponseParts.push({
-      role: "tool",
-      parts: [{ functionResponse: { name, response: result } }],
-    });
+async function runGuideAgent({ query, history = [] }) {
+  // Fallback if Vertex not configured
+  if (!generativeModel) {
+    return (
+      "Hi, I’m Daniel. I can guide you through the Admin panel.\n" +
+      "Try: “Where do I reschedule a job?” or “What does the Technicians tab do?”"
+    );
   }
 
-  // If we reached here without a text answer, produce a concise fallback
-  return "Done. (If you expected a list, try specifying a name, address piece, or phone last 4.)";
+  const req = { contents: buildContents({ query, history }) };
+  const resp = await generativeModel.generateContent(req);
+  const cand = resp?.response?.candidates?.[0];
+
+  if (!cand || !cand.content?.parts?.length) {
+    return "I’m here. Ask me about any Admin tab and I’ll guide you step-by-step.";
+  }
+  return cand.content.parts.map((p) => p.text).filter(Boolean).join("\n").trim();
 }
 
 // ---------------------- ROUTES ----------------------
@@ -545,10 +191,11 @@ app.post(["/", "/ask"], async (req, res) => {
         details: { got: req.body },
       });
     }
-    const response = await runAgent({ query, history });
-    return res.json({ response });
+
+    const response = await runGuideAgent({ query, history });
+    return res.json({ response, mode: "guide" });
   } catch (err) {
-    console.error("POST / error:", err);
+    console.error("POST /ask error:", err);
     return res.status(500).json({
       message: "Internal error",
       details: err?.message || String(err),
@@ -558,5 +205,5 @@ app.post(["/", "/ask"], async (req, res) => {
 
 // ---------------------- START ----------------------
 app.listen(PORT, () => {
-  console.log(`ask-daniel listening on :${PORT}`);
+  console.log(`safewayos-daniel-guide listening on :${PORT}`);
 });
