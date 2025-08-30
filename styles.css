@@ -646,6 +646,20 @@ body {
     border-color: #059669;
 }
 
+.copy-btn-daniel {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    color: #9ca3af; /* gray-400 */
+    font-size: 16px;
+    padding: 5px;
+    align-self: flex-start;
+    margin-top: 2px;
+}
+.copy-btn-daniel:hover {
+    color: #10b981; /* green-500 */
+}
+
 /* Styles for Email Writing Feature */
 .plus-btn {
     position: absolute;
