@@ -1432,6 +1432,7 @@ async function openScheduleJobModal(job) {
     const assignedToContainer = document.getElementById('modalScheduleAssignedToContainer');
     const assignedToEl = document.getElementById('modalScheduleAssignedTo');
     const confirmBtn = document.getElementById('confirmScheduleBtn');
+    const confirmBtnWrapper = document.getElementById('confirmScheduleBtnWrapper');
     const scheduleWarningMessage = document.getElementById('scheduleWarningMessage');
 
     // Populate technician dropdown once on modal open
@@ -1450,6 +1451,7 @@ async function openScheduleJobModal(job) {
 
         // 1. Reset state at the beginning of every update
         confirmBtn.disabled = false;
+        if (confirmBtnWrapper) confirmBtnWrapper.removeAttribute('title');
         scheduleWarningMessage.textContent = '';
         scheduleWarningMessage.classList.add('hidden');
         technicianContainer.classList.add('hidden');
@@ -1498,8 +1500,9 @@ async function openScheduleJobModal(job) {
 
                         if (existingSlotInRoute === newlySelectedSlot) {
                             confirmBtn.disabled = true;
-                            scheduleWarningMessage.textContent = "Job is already in this trip sheet for this time slot.";
-                            scheduleWarningMessage.classList.remove('hidden');
+                            if (confirmBtnWrapper) {
+                                confirmBtnWrapper.setAttribute('title', "Job is already in this trip sheet for this time slot.");
+                            }
                         }
                     }
                 } else {
