@@ -44,6 +44,7 @@ let currentProvider = null;
 let currentFilteredData = [];
 let currentJobToReschedule = null;
 let currentWorkerTechnicianId = null;
+let invoiceImageFiles = [];
 
 
 // --- DOM Elements ---
@@ -158,6 +159,8 @@ const modalMarkPaidBtn = document.getElementById('modalMarkPaidBtn');
 const modalDownloadPdfBtn = document.getElementById('modalDownloadPdfBtn');
 const modalWorkerCloseBtn = document.getElementById('modalWorkerCloseBtn');
 const modalRemoveWorkerBtn = document.getElementById('modalRemoveWorkerBtn');
+const imageUploadInput = document.getElementById('imageUpload');
+const imagePreviewContainer = document.getElementById('imagePreviewContainer');
 
 
 // --- Render Functions ---
@@ -1712,6 +1715,7 @@ function closeLogPartUsageModal() {
 // --- Firebase Logic ---
 let db;
 let auth;
+let storage;
 
 async function initializeTechnicians() {
     const techCollection = firebase.firestore().collection('technicians');
@@ -2257,7 +2261,7 @@ if(showAllInvoicesBtn) {
     }
 
 if(saveInvoiceBtn) {
-    saveInvoiceBtn.addEventListener('click', function() {
+    saveInvoiceBtn.addEventListener('click', async function() {
         // Run all the form validation checks first
         const paymentMethodRadio = document.querySelector('input[name="paymentMethod"]:checked');
         if (!paymentMethodRadio) {
@@ -2270,18 +2274,34 @@ if(saveInvoiceBtn) {
              return;
         }
 
+        let imageUrls = [];
+        try {
+            const uploadButton = this;
+            uploadButton.disabled = true;
+            uploadButton.textContent = 'Uploading Images...';
+            
+            imageUrls = await uploadInvoiceImages(currentJobIdForInvoicing);
+            
+            uploadButton.textContent = 'Saving Invoice...';
+        } catch (error) {
+            this.disabled = false;
+            this.textContent = 'Save Invoice';
+            // The upload function already shows an error message.
+            return;
+        }
+
         // --- NEW LOGIC ---
         // 1. Clear any old invoices from the queue.
         pendingInvoices = [];
 
         // 2. Create the invoice objects.
-        collectInvoiceData(); 
+        collectInvoiceData(imageUrls); 
         
         // 3. Generate a Base64 PDF for each invoice in the queue.
-        pendingInvoices.forEach(invoice => {
+        for (const invoice of pendingInvoices) {
             try {
                 // The generatePDF function returns the Base64 string
-                invoice.pdfDataURL = generatePDF(invoice, true); // Generate with preview watermark
+                invoice.pdfDataURL = await generatePDF(invoice, true); // Generate with preview watermark
                 if (!invoice.pdfDataURL) {
                      showMessage(`Warning: Could not generate PDF for the ${invoice.invoiceType} invoice.`, 'info');
                 }
@@ -2289,7 +2309,7 @@ if(saveInvoiceBtn) {
                 console.error(`Error during PDF generation for ${invoice.invoiceType} invoice:`, pdfError);
                 showMessage(`Error generating PDF for the ${invoice.invoiceType} invoice. It will be queued without it.`, 'error');
             }
-        });
+        }
         
         // 4. Show a success message and switch to the review screen.
         showMessage('Invoice(s) generated and ready for review.', 'success');
@@ -2304,6 +2324,8 @@ if(saveInvoiceBtn) {
             "Are you sure you want to clear the form? Unsaved data will be lost.",
             () => {
                 if(invoiceFormEl) invoiceFormEl.reset();
+            if (imagePreviewContainer) imagePreviewContainer.innerHTML = '';
+            invoiceImageFiles = [];
                 setFormEditable(true); 
                 if(customTaxArea) customTaxArea.classList.add('hidden');
                 if(chequeNumberArea) chequeNumberArea.classList.add('hidden');
@@ -2375,7 +2397,7 @@ if(saveInvoiceBtn) {
             const newStatus = currentlyViewedInvoiceData.status === 'paid' ? 'pending' : 'paid';
             let invoiceToUpdate = { ...currentlyViewedInvoiceData, status: newStatus, updatedAt: new Date().toISOString() };
             
-            const updatedPdfData = generatePDF(invoiceToUpdate);
+            const updatedPdfData = await generatePDF(invoiceToUpdate);
 
             if (updatedPdfData) {
                 invoiceToUpdate.pdfDataURL = updatedPdfData;
@@ -2398,7 +2420,7 @@ if(saveInvoiceBtn) {
         }
 
         // Always generate a fresh PDF to ensure it's up-to-date
-        const pdfData = generatePDF(currentlyViewedInvoiceData, false); // isPreview = false for final look
+        const pdfData = await generatePDF(currentlyViewedInvoiceData, false); // isPreview = false for final look
 
         if (pdfData) {
             const pdfPreviewModal = document.getElementById('pdfPreviewModal');
@@ -3498,6 +3520,10 @@ async function sendAllToOffice(jobId, customerInvoice, warrantyInvoice) {
 
 
     // Login Form
+    if(imageUploadInput) {
+        imageUploadInput.addEventListener('change', handleImageSelection);
+    }
+
     if (loginForm) {
         loginForm.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -3608,6 +3634,7 @@ if (sendAllInvoicesBtn) {
         }
         auth = firebase.auth();
         db = firebase.firestore();
+        storage = firebase.storage();
         console.log("Firebase Initialized (Compat).");
 
         const loginScreen = document.getElementById('loginScreen');
@@ -4140,6 +4167,51 @@ function showMessage(message, type = 'info') {
     }, 5000);
 }
 
+function handleImageSelection(event) {
+    if (!imagePreviewContainer) return;
+
+    // Clear previous previews and file list
+    imagePreviewContainer.innerHTML = '';
+    invoiceImageFiles = [];
+
+    const files = event.target.files;
+
+    for (const file of files) {
+        // Add file to our global array
+        invoiceImageFiles.push(file);
+
+        // Create the preview element
+        const previewWrapper = document.createElement('div');
+        previewWrapper.className = 'relative'; // For positioning the remove button
+
+        const img = document.createElement('img');
+        img.src = URL.createObjectURL(file);
+        img.className = 'w-full h-full object-cover rounded-lg';
+        img.onload = () => {
+            URL.revokeObjectURL(img.src); // Free up memory
+        }
+
+        const removeBtn = document.createElement('button');
+        removeBtn.innerHTML = '&times;';
+        removeBtn.className = 'absolute top-1 right-1 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center font-bold text-lg';
+        removeBtn.type = 'button'; // Prevent form submission
+
+        removeBtn.addEventListener('click', () => {
+            // Find the index of the file to remove
+            const indexToRemove = invoiceImageFiles.indexOf(file);
+            if (indexToRemove > -1) {
+                invoiceImageFiles.splice(indexToRemove, 1);
+            }
+            // Remove the preview from the DOM
+            previewWrapper.remove();
+        });
+
+        previewWrapper.appendChild(img);
+        previewWrapper.appendChild(removeBtn);
+        imagePreviewContainer.appendChild(previewWrapper);
+    }
+}
+
 function showConfirmationModal(title, message, onConfirm) {
     const modal = document.getElementById('confirmationModal');
     if (!modal) {
@@ -4271,7 +4343,23 @@ async function showInvoiceScreen(jobId) {
     }
 }
 
-function generatePDF(invoiceDataForPdf, isPreview = false) {
+async function getImageAsBase64(url) {
+    try {
+        const response = await fetch(url);
+        const blob = await response.blob();
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+        });
+    } catch (error) {
+        console.error(`Failed to fetch or convert image from ${url}:`, error);
+        return null;
+    }
+}
+
+async function generatePDF(invoiceDataForPdf, isPreview = false) {
     console.log(`[generatePDF] Starting PDF generation for invoice: ${invoiceDataForPdf.invoiceNumber}, isPreview: ${isPreview}`);
     if (!invoiceDataForPdf) {
         console.error('[generatePDF] No invoice data provided.');
@@ -4477,6 +4565,51 @@ function generatePDF(invoiceDataForPdf, isPreview = false) {
         doc.setTextColor(BRAND_COLOR);
         doc.text("Total Due:", totalsXLabel, totalsY, { align: 'right' });
         doc.text(formatCurrency(invoiceDataForPdf.total), rightColumnX, totalsY, { align: 'right' });
+
+        // --- ATTACHED IMAGES ---
+        if (invoiceDataForPdf.imageUrls && invoiceDataForPdf.imageUrls.length > 0) {
+            leftColumnY += 5; // Add some space before the images section
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(HEADING_COLOR);
+            doc.text('Attached Images', margin, leftColumnY);
+            leftColumnY += 8;
+
+            const imageWidth = (pageWidth - margin * 3) / 2; // Two columns with a margin in between
+            let xPos = margin;
+            let maxImageHeightInRow = 0;
+
+            for (let i = 0; i < invoiceDataForPdf.imageUrls.length; i++) {
+                const imageUrl = invoiceDataForPdf.imageUrls[i];
+                const base64Image = await getImageAsBase64(imageUrl);
+
+                if (base64Image) {
+                    const imgProps = doc.getImageProperties(base64Image);
+                    const aspectRatio = imgProps.height / imgProps.width;
+                    const imageHeight = imageWidth * aspectRatio;
+
+                    if (leftColumnY + imageHeight > pageHeight - 25) { // Check for page break (leave footer room)
+                        doc.addPage();
+                        leftColumnY = margin;
+                        xPos = margin;
+                    }
+
+                    doc.addImage(base64Image, 'JPEG', xPos, leftColumnY, imageWidth, imageHeight);
+                    maxImageHeightInRow = Math.max(maxImageHeightInRow, imageHeight);
+                    
+                    if ((i + 1) % 2 === 0) {
+                        xPos = margin;
+                        leftColumnY += maxImageHeightInRow + 5;
+                        maxImageHeightInRow = 0;
+                    } else {
+                        xPos += imageWidth + margin;
+                    }
+                }
+            }
+            
+            if (invoiceDataForPdf.imageUrls.length % 2 !== 0) {
+                leftColumnY += maxImageHeightInRow + 5;
+            }
+        }
 
         // --- FOOTER, TERMS & SIGNATURE ---
         let finalY = Math.max(leftColumnY, totalsY, pageHeight - 60); 
@@ -4886,7 +5019,37 @@ function updateLineItemTotal(id) {
     if(itemTotalEl) itemTotalEl.textContent = formatCurrency(quantity * price);
 }
 
-function collectInvoiceData() {
+async function uploadInvoiceImages(jobId) {
+    if (invoiceImageFiles.length === 0) {
+        return [];
+    }
+    if (!jobId) {
+        console.error("Cannot upload images, Job ID is missing.");
+        showMessage("Cannot upload images, Job ID is missing.", "error");
+        throw new Error("Job ID is missing");
+    }
+
+    const uploadPromises = invoiceImageFiles.map(async (file) => {
+        const filePath = `invoice-images/${jobId}/${Date.now()}-${file.name}`;
+        const fileRef = storage.ref(filePath);
+        await fileRef.put(file);
+        const url = await fileRef.getDownloadURL();
+        return url;
+    });
+
+    try {
+        const imageUrls = await Promise.all(uploadPromises);
+        console.log("All images uploaded successfully:", imageUrls);
+        return imageUrls;
+    } catch (error) {
+        console.error("One or more image uploads failed:", error);
+        showMessage("Error uploading images. Please try again.", "error");
+        // We throw the error so the calling function knows the process failed.
+        throw error;
+    }
+}
+
+function collectInvoiceData(imageUrls = []) {
     // --- 1. GATHER ALL RAW DATA FROM THE FORM ---
     const invoiceFormEl = document.getElementById('invoiceForm');
     const formData = new FormData(invoiceFormEl);
@@ -4915,6 +5078,7 @@ function collectInvoiceData() {
         selectedCountyTax: selectedCountyValue,
         planType: document.getElementById('planType').value,
         warrantyName: document.getElementById('warrantyName').value,
+        imageUrls: imageUrls,
     };
      if (auth.currentUser && auth.currentUser.uid) {
         baseData.createdByWorkerId = auth.currentUser.uid;
