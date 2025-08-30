@@ -13,6 +13,7 @@ const GENERATE_TRIP_SHEETS_URL = 'https://generate-trip-sheets-216681158749.us-c
 const ASK_DANIEL_URL = 'https://ask-daniel-216681158749.us-central1.run.app';
 const SEND_SCHEDULING_LINKS_URL = 'https://send-manual-scheduling-links-216681158749.us-central1.run.app';
 const SEND_HOMEGUARD_CLAIM_URL = 'https://send-homeguard-claim-216681158749.us-central1.run.app';
+const UPLOAD_INVOICE_IMAGE_URL = 'https://upload-invoice-image-216681158749.us-central1.run.app/upload';
 
 // --- Global State ---
 let allJobsData = [];
@@ -5029,22 +5030,55 @@ async function uploadInvoiceImages(jobId) {
         throw new Error("Job ID is missing");
     }
 
+    // Helper to read a file as a Base64 Data URL
+    const readFileAsDataURL = (file) => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = (error) => reject(error);
+            reader.readAsDataURL(file);
+        });
+    };
+
     const uploadPromises = invoiceImageFiles.map(async (file) => {
-        const filePath = `invoice-images/${jobId}/${Date.now()}-${file.name}`;
-        const fileRef = storage.ref(filePath);
-        await fileRef.put(file);
-        const url = await fileRef.getDownloadURL();
-        return url;
+        try {
+            const imageDataUrl = await readFileAsDataURL(file);
+            
+            const response = await fetch(UPLOAD_INVOICE_IMAGE_URL, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    jobId: jobId,
+                    filename: file.name,
+                    imageDataUrl: imageDataUrl,
+                }),
+            });
+
+            if (!response.ok) {
+                const errorResult = await response.json();
+                throw new Error(errorResult.details || `Server error: ${response.status}`);
+            }
+
+            const result = await response.json();
+            return result.url;
+
+        } catch (error) {
+            console.error(`Failed to upload ${file.name}:`, error);
+            // We throw the error so that Promise.all will reject.
+            throw error; 
+        }
     });
 
     try {
         const imageUrls = await Promise.all(uploadPromises);
-        console.log("All images uploaded successfully:", imageUrls);
+        console.log("All images uploaded successfully via backend:", imageUrls);
         return imageUrls;
     } catch (error) {
         console.error("One or more image uploads failed:", error);
         showMessage("Error uploading images. Please try again.", "error");
-        // We throw the error so the calling function knows the process failed.
+        // Re-throw the error to be caught by the save button's handler
         throw error;
     }
 }
