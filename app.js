@@ -119,6 +119,8 @@ const dashboardLatestJobsListEl = document.getElementById('dashboardLatestJobsLi
 const chatLog = document.getElementById('chatLog');
 const chatInput = document.getElementById('chatInput');
 const sendChatButton = document.getElementById('sendChatButton');
+const activateEmailBtn = document.getElementById('activate-email-btn');
+const emailWritingPopup = document.getElementById('email-writing-popup');
     const sendAllInvoicesBtn = document.getElementById('sendAllInvoicesBtn');
 
 // --- Worker PWA DOM Elements ---
@@ -1816,6 +1818,21 @@ function listenForWorkerJobs(technicianId, technicianName) {
         }
     });
 }
+
+    if (activateEmailBtn && emailWritingPopup) {
+        activateEmailBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            emailWritingPopup.classList.toggle('is-visible');
+        });
+    }
+
+    window.addEventListener('click', (e) => {
+        if (emailWritingPopup && emailWritingPopup.classList.contains('is-visible')) {
+            if (!emailWritingPopup.contains(e.target) && !activateEmailBtn.contains(e.target)) {
+                emailWritingPopup.classList.remove('is-visible');
+            }
+        }
+    });
 
 
 // --- Form Submit Handlers & Event Listeners ---
