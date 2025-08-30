@@ -32,7 +32,7 @@ const MEMORY_TTL_MS = Number(process.env.MEMORY_TTL_MS ?? 30 * 60 * 1000); // 30
 const MEMORY_SWEEP_MS = Number(process.env.MEMORY_SWEEP_MS ?? 5 * 60 * 1000); // sweep every 5 min
 
 // ---------------------- SYSTEM PROMPT ----------------------
-const SYSTEM_PROMPT = `
+const TOUR_GUIDE_PROMPT = `
 ###ROLE###
 You’re an AI assistant in an automation system named SafewayOS, this system is made for a Garage Door repair and service company named “Safeway Garage Doors” based in Santa ana California, your sole purpose is to guide whoever chats with you across the app, like a guide, using the context and sections of the app im going to provide you with.
 ###PERSONALITY###
@@ -113,6 +113,23 @@ There’s no settings as of now.
 -Do not invent features, data, or actions. You only describe where to click and what the UI shows.
 `;
 
+const EMAIL_WRITING_PROMPT = `
+### ROLE ###
+You are an expert email writing assistant. Your purpose is to help users draft professional, clear, and effective emails.
+
+### PERSONALITY ###
+You are helpful, professional, and concise. You should be ready to take instructions and edit the email based on user feedback.
+
+### INSTRUCTIONS ###
+- Write emails based on the user's request.
+- Do not add any extra information like subject lines unless asked.
+- Do not sign the email or add a name unless specifically instructed to.
+- You can and should ask for clarification if the user's request is ambiguous.
+- When the user asks for edits, apply them to the entire email and provide the complete, updated version.
+- Your primary goal is to produce a final email draft that the user can copy and paste.
+`;
+
+
 // ---------------------- LLM INIT ----------------------
 const vertexAI =
   PROJECT_ID && VERTEX_LOCATION
@@ -122,7 +139,7 @@ const vertexAI =
 const generativeModel = vertexAI
   ? vertexAI.getGenerativeModel({
       model: MODEL,
-      systemInstruction: { role: "system", parts: [{ text: SYSTEM_PROMPT }] },
+      // System instruction is now set dynamically in the chat() function
       generationConfig: {
         temperature: TEMPERATURE,
         topP: 0.95,
@@ -248,7 +265,7 @@ function extractMessage(req) {
   return null;
 }
 
-async function chat({ message, history, sessionId }) {
+async function chat({ message, history, sessionId, mode = 'tour_guide' }) {
   if (!generativeModel) {
     // Friendly offline fallback
     if (!message) return "Hi! I’m Daniel. Ask me anything.";
@@ -257,8 +274,13 @@ async function chat({ message, history, sessionId }) {
   }
 
   try {
+    const systemPrompt = mode === 'email_writing' ? EMAIL_WRITING_PROMPT : TOUR_GUIDE_PROMPT;
+    
     const sessionTurns = getTurnsForSession(sessionId);
-    const req = { contents: buildContents({ message, history, sessionTurns }) };
+    const req = {
+      contents: buildContents({ message, history, sessionTurns }),
+      systemInstruction: { role: "system", parts: [{ text: systemPrompt }] },
+    };
     const resp = await generativeModel.generateContent(req);
     const cand = resp?.response?.candidates?.[0];
     const text = cand?.content?.parts?.map(p => p.text).filter(Boolean).join("\n").trim()
@@ -345,6 +367,7 @@ app.post(["/", "/ask", "/ask-daniel"], async (req, res) => {
   try {
     const message = extractMessage(req);
     const history = Array.isArray(req.body?.history) ? req.body.history : [];
+    const mode = req.body?.mode || 'tour_guide';
 
     if (!message) {
       return res.status(400).json({
@@ -361,9 +384,10 @@ app.post(["/", "/ask", "/ask-daniel"], async (req, res) => {
     const response = await chat({
       message,
       history,
-      sessionId: getSessionId(req)
+      sessionId: getSessionId(req),
+      mode,
     });
-    return res.json({ response, mode: "chat" });
+    return res.json({ response, mode });
   } catch (err) {
     console.error("POST /ask error:", err);
     return res.status(500).json({ message: "Internal error", details: err?.message || String(err) });
