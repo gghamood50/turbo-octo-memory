@@ -5,15 +5,17 @@ const crypto = require("crypto");
 
 // --- INITIALIZATION ---
 if (!admin.apps.length) {
-  admin.initializeApp();
+  admin.initializeApp({
+    storageBucket: "safewayos2.firebasestorage.app",
+  });
 }
 
-const storageBucket = process.env.FIREBASE_STORAGE_BUCKET || "safewayos2.appspot.com";
+const storageBucket = process.env.FIREBASE_STORAGE_BUCKET || "safewayos2.firebasestorage.app";
 const bucket = admin.storage().bucket(storageBucket);
 
 const app = express();
 // Use CORS middleware and increase the JSON body limit to handle Base64 images
-app.use(cors({ origin: true }));
+app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 
 // --- HELPERS ---
