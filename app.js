@@ -1422,7 +1422,9 @@ async function handleRescheduleConfirm() {
     try {
         await jobRef.update({
             status: newStatus,
-            rescheduleReason: reason
+            rescheduleReason: reason,
+            assignedTechnicianId: firebase.firestore.FieldValue.delete(),
+            assignedTechnicianName: firebase.firestore.FieldValue.delete()
         });
         showMessage('Job has been rescheduled.', 'success');
         closeRescheduleModal();
@@ -1934,7 +1936,7 @@ function listenForWorkerJobs(technicianId, technicianName) {
     if(todaysRouteHeading) todaysRouteHeading.textContent = "Today's Route";
 
     const jobsQuery = firebase.firestore().collection("jobs")
-        .where("assignedTechnicianId", "==", technicianId)
+        .where("participatingTechnicians", "array-contains", technicianId)
         .where("scheduledDate", "==", todayDateString);
 
     workerJobsListener = jobsQuery.onSnapshot(async (snapshot) => {
@@ -2682,7 +2684,6 @@ if(saveInvoiceBtn) {
         } else {
             // Logic to schedule/reschedule
             const jobId = document.getElementById('modalScheduleJobId').value;
-            // Basic validation
             const dateValue = document.getElementById('modalJobDate').value;
             const timeSlotValue = document.getElementById('modalJobTimeSlot').value;
             if (!dateValue || !timeSlotValue) {
@@ -2691,6 +2692,9 @@ if(saveInvoiceBtn) {
             }
 
             const jobRef = firebase.firestore().doc(`jobs/${jobId}`);
+            const originalJob = currentJobToReschedule; // Get the state of the job when the modal was opened
+            const isReschedule = originalJob.status === 'Scheduled' || originalJob.status === 'Awaiting completion';
+
             const updatedData = {
                 status: 'Scheduled',
                 scheduledDate: dateValue,
@@ -2698,33 +2702,36 @@ if(saveInvoiceBtn) {
                 rescheduleReason: firebase.firestore.FieldValue.delete()
             };
 
-            const technicianSelect = document.getElementById('modalJobTechnician');
-            const selectedTechId = technicianSelect.value;
+            if (isReschedule) {
+                // It's a reschedule, so unassign the technician as per the requirement.
+                updatedData.assignedTechnicianId = firebase.firestore.FieldValue.delete();
+                updatedData.assignedTechnicianName = firebase.firestore.FieldValue.delete();
+            } else {
+                // It's a new schedule, so check for a technician assignment.
+                const technicianSelect = document.getElementById('modalJobTechnician');
+                const selectedTechId = technicianSelect.value;
 
-            if (technicianSelect.offsetParent !== null && !selectedTechId) {
-                 showMessage('Please select a technician to assign.', 'error');
-                 return;
-            }
-
-            if (selectedTechId) {
-                const selectedTech = allTechniciansData.find(t => t.id === selectedTechId);
-                if (selectedTech) {
-                    updatedData.assignedTechnicianId = selectedTechId;
-                    updatedData.assignedTechnicianName = selectedTech.name;
-                } else {
-                     showMessage('Selected technician not found. Please try again.', 'error');
-                     return;
+                if (technicianSelect.offsetParent !== null && selectedTechId) {
+                    const selectedTech = allTechniciansData.find(t => t.id === selectedTechId);
+                    if (selectedTech) {
+                        updatedData.assignedTechnicianId = selectedTechId;
+                        updatedData.assignedTechnicianName = selectedTech.name;
+                        updatedData.participatingTechnicians = firebase.firestore.FieldValue.arrayUnion(selectedTechId);
+                    } else {
+                        showMessage('Selected technician not found. Please try again.', 'error');
+                        return;
+                    }
                 }
             }
 
             try {
                 await jobRef.update(updatedData);
                 closeScheduleJobModal();
-                const successMessage = confirmBtn.textContent === 'Confirm Schedule' ? 'Job successfully scheduled.' : 'Job successfully rescheduled.';
+                const successMessage = isReschedule ? 'Job successfully rescheduled.' : 'Job successfully scheduled.';
                 showMessage(successMessage, 'success');
             } catch (error) {
-                console.error("Error scheduling job:", error);
-                showMessage('Error scheduling job.', 'error');
+                console.error("Error updating job:", error);
+                showMessage('Error saving job details.', 'error');
             }
         }
     });
@@ -3385,7 +3392,8 @@ if(saveInvoiceBtn) {
                     batch.update(jobRef, {
                         status: 'Awaiting completion',
                         assignedTechnicianId: techInfo.technicianId,
-                        assignedTechnicianName: techInfo.technicianName
+                        assignedTechnicianName: techInfo.technicianName,
+                        participatingTechnicians: firebase.firestore.FieldValue.arrayUnion(techInfo.technicianId)
                     });
                 });
             }
@@ -3932,6 +3940,7 @@ async function handleConfirmFitInSheet() {
             status: 'Awaiting completion',
             assignedTechnicianId: currentJobToReschedule.assignedTechnicianId,
             assignedTechnicianName: currentJobToReschedule.assignedTechnicianName,
+            participatingTechnicians: firebase.firestore.FieldValue.arrayUnion(currentJobToReschedule.assignedTechnicianId),
             rescheduleReason: firebase.firestore.FieldValue.delete()
         });
 
