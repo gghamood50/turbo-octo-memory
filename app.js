@@ -201,6 +201,9 @@ function renderJobs(jobs) {
         } else if (statusText === 'Link Sent!') {
             statusClass = 'status-link-sent';
             actionsHtml = `<button class="btn-secondary-stitch schedule-job-btn" data-id="${job.id}">Schedule Manually</button>`;
+        } else if (statusText === 'Dispatcher call back') {
+            statusClass = 'status-dispatcher-call-back';
+            actionsHtml = `<button class="btn-secondary-stitch schedule-job-btn" data-id="${job.id}">View Details</button>`;
         } else { // Covers 'Awaiting completion' and 'Completed'
              if (statusText === 'Awaiting completion') statusClass = 'status-awaiting-completion';
              if (statusText === 'Completed') statusClass = 'status-completed';
