@@ -175,6 +175,7 @@ body {
 .status-scheduled { background-color: #d1fae5; color: #065f46; } /* FIXED: Reverted to green */
 .status-awaiting-completion { background-color: #dbeafe; color: #1e40af; } /* FIXED: Set to blue */
 .status-completed { background-color: #dcfce7; color: #15803d; }
+.status-dispatcher-call-back { background-color: #fee2e2; color: #b91c1c; }
 .status-link-sent { background-color: #f3e8ff; color: #6b21a8; }
 .status-online, .status-available { background-color: #d1fae5; color: #065f46; }
 .status-offline { background-color: #e5e7eb; color: #4b5563; }
