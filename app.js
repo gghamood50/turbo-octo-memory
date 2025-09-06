@@ -1577,12 +1577,13 @@ async function openScheduleJobModal(job) {
         scheduleWarningMessage.classList.add('hidden');
         technicianContainer.classList.add('hidden');
         assignedToContainer.classList.add('hidden');
+        assignedToEl.textContent = ''; // Explicitly clear previous technician name
 
         // 2. Handle non-interactive states
         if (status === 'Completed') {
             confirmBtn.textContent = 'View Only';
             confirmBtn.disabled = true;
-            if (job.assignedTechnicianName) {
+            if (job.assignedTechnicianId && job.assignedTechnicianName) { // Check for ID as well
                 assignedToEl.textContent = job.assignedTechnicianName;
                 assignedToContainer.classList.remove('hidden');
             }
@@ -1596,9 +1597,9 @@ async function openScheduleJobModal(job) {
 
             // 4. Determine UI visibility and the technician to check against
             let technicianIdForCheck = job.assignedTechnicianId;
-            if (job.assignedTechnicianId) {
-                assignedToContainer.classList.remove('hidden');
+            if (job.assignedTechnicianId && job.assignedTechnicianName) { // Check for name as well
                 assignedToEl.textContent = job.assignedTechnicianName;
+                assignedToContainer.classList.remove('hidden');
             } else if (tripSheetsExistForDate) {
                 technicianContainer.classList.remove('hidden');
                 technicianIdForCheck = technicianSelect.value;
