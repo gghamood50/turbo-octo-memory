@@ -1,5 +1,4 @@
 const express = require("express");
-const cors = require("cors");
 const admin = require("firebase-admin");
 const crypto = require("crypto");
 const sgMail = require('@sendgrid/mail');
@@ -22,7 +21,25 @@ const storageBucket = process.env.FIREBASE_STORAGE_BUCKET || "safewayos2.firebas
 const bucket = admin.storage().bucket(storageBucket);
 
 const app = express();
-app.use(cors({ origin: true }));
+// A custom middleware to set CORS headers
+app.use((req, res, next) => {
+  // Allow requests from 'null' origin (local files). 
+  // For production, this should be a specific domain.
+  res.setHeader('Access-Control-Allow-Origin', 'null');
+  
+  // Set allowed methods for the preflight request.
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+
+  // Set allowed headers for the preflight request.
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+  // Handle preflight OPTIONS request.
+  if (req.method === 'OPTIONS') {
+    return res.status(204).send('');
+  }
+
+  next();
+});
 app.use(express.json({ limit: "25mb" }));
 
 /**
