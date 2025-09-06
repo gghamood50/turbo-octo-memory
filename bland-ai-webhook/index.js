@@ -124,19 +124,32 @@ async function safeUpdateStatus(jobRef, status, errorReason = null, extra = {}) 
 functions.http("blandAiWebhook", async (req, res) => {
   const started = Date.now();
   const requestId = req.get("X-Request-Id") || `local-${started}`;
-
-  if (req.method !== "POST") return res.status(405).send("Method Not Allowed");
-
   const payload = req.body || {};
   const call_id = payload.call_id || payload.callId || null;
   const concatenated_transcript = payload.concatenated_transcript || "";
+  const summary = payload.summary || null;
   const request_data = payload.request_data || {};
+
+  const baseResponse = {
+    summary,
+    transcript: concatenated_transcript,
+  };
+
+  const dbUpdate = {
+    summary,
+    transcript: concatenated_transcript,
+  };
+
+  if (req.method !== "POST") {
+    return res.status(405).json({ ...baseResponse, status: "error", error: "Method Not Allowed" });
+  }
 
   console.info("Webhook received", {
     requestId,
     call_id,
     disposition_tag: payload.disposition_tag || null,
     transcriptLen: concatenated_transcript?.length || 0,
+    summaryLen: summary?.length || 0,
   });
 
   // Persist raw webhook
@@ -161,7 +174,7 @@ functions.http("blandAiWebhook", async (req, res) => {
           { merge: true }
         );
       }
-      return res.status(202).json({ status: "accepted_no_job" });
+      return res.status(202).json({ ...baseResponse, status: "accepted_no_job" });
     }
 
     const jobSnap = await jobRef.get();
@@ -172,6 +185,7 @@ functions.http("blandAiWebhook", async (req, res) => {
     if (jobData?.status === "Scheduled" && jobData?.timeSlot && jobData?.scheduledDate) {
       await jobRef.set(
         {
+          ...dbUpdate,
           lastWebhookAt: FieldValue.serverTimestamp(),
           lastWebhookDisposition: payload.disposition_tag || null,
           time_slot: FieldValue.delete(),
@@ -179,7 +193,7 @@ functions.http("blandAiWebhook", async (req, res) => {
         },
         { merge: true }
       );
-      return res.status(200).json({ status: "ok_idempotent" });
+      return res.status(200).json({ ...baseResponse, status: "ok_idempotent" });
     }
 
     // Build Vertex request
@@ -252,8 +266,8 @@ functions.http("blandAiWebhook", async (req, res) => {
     // timeSlot field is mandatory (always present); if scheduled then must be valid
     if (isScheduled && !ALLOWED_SLOTS.has(slot)) {
       console.warn("Invalid or missing timeSlot for a scheduled outcome; forcing manual follow-up", { slot });
-      await safeUpdateStatus(jobRef, "Manual Follow-up", "Invalid timeSlot for scheduled");
-      return res.status(200).json({ status: "manual_follow_up_invalid_slot" });
+      await safeUpdateStatus(jobRef, "Manual Follow-up", "Invalid timeSlot for scheduled", dbUpdate);
+      return res.status(200).json({ ...baseResponse, status: "manual_follow_up_invalid_slot" });
     }
 
     // Determine scheduledDate with required fallback behavior
@@ -278,13 +292,15 @@ functions.http("blandAiWebhook", async (req, res) => {
       if (!scheduledDate) {
         // Could not determine a date even after fallbacks -> manual follow-up (data safety)
         await safeUpdateStatus(jobRef, "Manual Follow-up", "Missing scheduledDate after fallbacks", {
+          ...dbUpdate,
           lastWebhookAt: FieldValue.serverTimestamp(),
           lastWebhookDisposition: payload.disposition_tag || null,
         });
-        return res.status(200).json({ status: "manual_follow_up_missing_date" });
+        return res.status(200).json({ ...baseResponse, status: "manual_follow_up_missing_date" });
       }
 
       const update = {
+        ...dbUpdate,
         status: "Scheduled",
         timeSlot: slot,
         scheduledDate,
@@ -297,18 +313,20 @@ functions.http("blandAiWebhook", async (req, res) => {
       };
       await jobRef.set(update, { merge: true });
       console.info(`Job ${jobRef.id} scheduled`, { timeSlot: slot, scheduledDate });
-      return res.status(200).json({ status: "scheduled", timeSlot: slot, scheduledDate });
+      return res.status(200).json({ ...baseResponse, status: "scheduled", timeSlot: slot, scheduledDate });
     } else {
       await safeUpdateStatus(jobRef, "Manual Follow-up", null, {
+        ...dbUpdate,
         lastWebhookAt: FieldValue.serverTimestamp(),
         lastWebhookDisposition: payload.disposition_tag || null,
       });
-      return res.status(200).json({ status: "manual_follow_up" });
+      return res.status(200).json({ ...baseResponse, status: "manual_follow_up" });
     }
   } catch (err) {
     console.error("Webhook processing error:", err?.message || err);
     try {
       await safeUpdateStatus(jobRef, "Manual Follow-up", err?.message || String(err), {
+        ...dbUpdate,
         lastWebhookAt: FieldValue.serverTimestamp(),
         lastWebhookDisposition: payload.disposition_tag || null,
       });
@@ -321,7 +339,7 @@ functions.http("blandAiWebhook", async (req, res) => {
     } catch (e2) {
       console.error("Failed to write failure:", e2?.message || e2);
     }
-    return res.status(200).json({ status: "manual_follow_up_error" });
+    return res.status(200).json({ ...baseResponse, status: "manual_follow_up_error" });
   } finally {
     console.info("Webhook finished", { requestId, ms: Date.now() - started });
   }
