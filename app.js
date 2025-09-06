@@ -1532,6 +1532,17 @@ async function openScheduleJobModal(job) {
     document.getElementById('modalSchedulePlanType').textContent = job.planType || 'N/A';
     document.getElementById('modalScheduleDispatchOrPoNumber').textContent = job.dispatchOrPoNumber || 'N/A';
 
+    const summaryContainer = document.getElementById('modalScheduleSummaryContainer');
+    const summaryEl = document.getElementById('modalScheduleSummary');
+    if (summaryEl && summaryContainer) {
+        if (job.summary && job.summary.trim() !== '') {
+            summaryEl.textContent = job.summary;
+            summaryContainer.classList.remove('hidden');
+        } else {
+            summaryContainer.classList.add('hidden');
+        }
+    }
+
     const reasonContainer = document.getElementById('rescheduleReasonContainer');
     const reasonEl = document.getElementById('modalScheduleRescheduleReason');
 
