@@ -49,6 +49,7 @@ let invoiceImageFiles = [];
 
 
 // --- DOM Elements ---
+const tabVisibilityContainer = document.getElementById('tab-visibility-container');
 const invoiceSearchInput = document.getElementById('invoiceSearchInput');
 const loginScreen = document.getElementById('loginScreen');
 const workerHomeScreen = document.getElementById('workerHomeScreen');
@@ -1369,6 +1370,12 @@ function showWorkerJobDetails(job) {
 
 // --- UI Navigation ---
 function switchView(targetId) {
+    const settings = loadTabSettings();
+    if (settings[targetId] === false) {
+        console.warn(`Attempted to switch to a hidden tab: ${targetId}. Action prevented.`);
+        return;
+    }
+
     contentSections.forEach(section => section.classList.add('hidden'));
     const activeSection = document.getElementById(targetId);
     if (activeSection) activeSection.classList.remove('hidden');
@@ -3536,6 +3543,26 @@ async function sendAllToOffice(jobId, customerInvoice, warrantyInvoice) {
         imageUploadInput.addEventListener('change', handleImageSelection);
     }
 
+    if (tabVisibilityContainer) {
+        tabVisibilityContainer.addEventListener('change', (e) => {
+            if (e.target.classList.contains('toggle-checkbox')) {
+                const targetId = e.target.dataset.target;
+                const isVisible = e.target.checked;
+                const link = document.querySelector(`.nav-link[data-target="${targetId}"]`);
+
+                if (link) {
+                    link.classList.toggle('hidden', !isVisible);
+                }
+                
+                if (!isVisible && currentView === targetId) {
+                    switchView('dashboard');
+                }
+
+                saveTabSettings();
+            }
+        });
+    }
+
     if (loginForm) {
         loginForm.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -3692,7 +3719,19 @@ if (sendAllInvoicesBtn) {
                         }
                     });
                     initializeDanielAIChat();
-                    switchView('dashboard');
+                    
+                    applyTabVisibility();
+                    renderTabVisibilitySettings();
+                    
+                    // If the default view 'dashboard' is hidden, switch to the first available one.
+                    const settings = loadTabSettings();
+                    if (settings['dashboard'] === false) {
+                        const firstVisibleTab = Array.from(navLinks).find(link => settings[link.dataset.target] !== false && link.dataset.target !== 'settings');
+                        switchView(firstVisibleTab ? firstVisibleTab.dataset.target : 'settings');
+                    } else {
+                        switchView('dashboard');
+                    }
+
                 } else {
                     // --- WORKER ROLE ---
                     console.log("Worker user signed in:", user.email);
@@ -5455,3 +5494,100 @@ function openWarrantyDetailModal(warranty) {
         if (event.target == modal) { modal.style.display = 'none'; }
     }
 }
+
+// --- Tab Visibility Settings ---
+
+function renderTabVisibilitySettings() {
+    if (!tabVisibilityContainer) return;
+
+    tabVisibilityContainer.innerHTML = '';
+    const settings = loadTabSettings();
+
+    navLinks.forEach(link => {
+        const targetId = link.dataset.target;
+        if (targetId === 'settings') return;
+
+        const isVisible = settings[targetId] !== false;
+
+        const toggleWrapper = document.createElement('div');
+        toggleWrapper.className = 'flex items-center justify-between py-2';
+
+        const label = document.createElement('label');
+        label.htmlFor = `toggle-${targetId}`;
+        label.className = 'text-slate-700 font-medium';
+        
+        // Correctly extract only the text label, ignoring the icon's text
+        let labelText = '';
+        link.childNodes.forEach(node => {
+            if (node.nodeType === Node.TEXT_NODE && node.textContent.trim() !== '') {
+                labelText = node.textContent.trim();
+            }
+        });
+        label.textContent = labelText || targetId; // Fallback to targetId if no text found
+
+        const switchContainer = document.createElement('div');
+        switchContainer.className = 'relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in';
+
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.name = `toggle-${targetId}`;
+        checkbox.id = `toggle-${targetId}`;
+        checkbox.className = 'toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer';
+        checkbox.checked = isVisible;
+        checkbox.dataset.target = targetId;
+
+        const switchLabel = document.createElement('label');
+        switchLabel.htmlFor = `toggle-${targetId}`;
+        switchLabel.className = 'toggle-label block overflow-hidden h-6 rounded-full bg-gray-300 cursor-pointer';
+
+        switchContainer.appendChild(checkbox);
+        switchContainer.appendChild(switchLabel);
+        toggleWrapper.appendChild(label);
+        toggleWrapper.appendChild(switchContainer);
+        tabVisibilityContainer.appendChild(toggleWrapper);
+    });
+}
+
+function saveTabSettings() {
+    const settings = {};
+    const toggles = document.querySelectorAll('#tab-visibility-container .toggle-checkbox');
+    toggles.forEach(toggle => {
+        settings[toggle.dataset.target] = toggle.checked;
+    });
+    localStorage.setItem('tabVisibilitySettings', JSON.stringify(settings));
+}
+
+function loadTabSettings() {
+    const settingsString = localStorage.getItem('tabVisibilitySettings');
+    return settingsString ? JSON.parse(settingsString) : {};
+}
+
+function applyTabVisibility() {
+    const settings = loadTabSettings();
+    let firstVisibleTab = null;
+
+    navLinks.forEach(link => {
+        const targetId = link.dataset.target;
+        // Settings tab can't be hidden
+        if (targetId === 'settings') {
+            if (!firstVisibleTab) firstVisibleTab = targetId;
+            return;
+        }
+
+        const isVisible = settings[targetId] !== false; // Default to visible
+        link.classList.toggle('hidden', !isVisible);
+
+        if (isVisible && !firstVisibleTab) {
+            firstVisibleTab = targetId;
+        }
+    });
+
+    // If the currently active tab is now hidden, switch to the first available one.
+    const activeLink = document.querySelector('.nav-link.active');
+    if (activeLink && activeLink.classList.contains('hidden')) {
+        // If all tabs are hidden, it will switch to 'settings'
+        switchView(firstVisibleTab || 'settings');
+    }
+}
+
+// --- End Tab Visibility Settings ---
