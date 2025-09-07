@@ -5570,6 +5570,47 @@ function renderTabVisibilitySettings() {
         const targetId = link.dataset.target;
         if (targetId === 'settings') return;
 
+        if (targetId === 'performance') {
+            const toggleWrapper = document.createElement('div');
+            toggleWrapper.className = 'flex items-center justify-between py-2';
+
+            const labelContainer = document.createElement('div');
+            
+            const label = document.createElement('label');
+            label.htmlFor = 'toggle-performance';
+            label.className = 'text-slate-700 font-medium';
+            label.textContent = 'Performance';
+            
+            const comingSoonText = document.createElement('p');
+            comingSoonText.className = 'text-xs text-gray-500';
+            comingSoonText.textContent = 'This feature is coming soon!';
+
+            labelContainer.appendChild(label);
+            labelContainer.appendChild(comingSoonText);
+
+            const switchContainer = document.createElement('div');
+            switchContainer.className = 'relative inline-block w-10 mr-2 align-middle select-none';
+
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.name = 'toggle-performance';
+            checkbox.id = 'toggle-performance';
+            checkbox.className = 'toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-not-allowed';
+            checkbox.checked = false;
+            checkbox.disabled = true;
+
+            const switchLabel = document.createElement('label');
+            switchLabel.htmlFor = 'toggle-performance';
+            switchLabel.className = 'toggle-label block overflow-hidden h-6 rounded-full bg-gray-300 cursor-not-allowed';
+
+            switchContainer.appendChild(checkbox);
+            switchContainer.appendChild(switchLabel);
+            toggleWrapper.appendChild(labelContainer);
+            toggleWrapper.appendChild(switchContainer);
+            tabVisibilityContainer.appendChild(toggleWrapper);
+            return;
+        }
+
         const isVisible = settings[targetId] !== false;
 
         const toggleWrapper = document.createElement('div');
@@ -5579,14 +5620,13 @@ function renderTabVisibilitySettings() {
         label.htmlFor = `toggle-${targetId}`;
         label.className = 'text-slate-700 font-medium';
         
-        // Correctly extract only the text label, ignoring the icon's text
         let labelText = '';
         link.childNodes.forEach(node => {
             if (node.nodeType === Node.TEXT_NODE && node.textContent.trim() !== '') {
                 labelText = node.textContent.trim();
             }
         });
-        label.textContent = labelText || targetId; // Fallback to targetId if no text found
+        label.textContent = labelText || targetId;
 
         const switchContainer = document.createElement('div');
         switchContainer.className = 'relative inline-block w-10 mr-2 align-middle select-none transition duration-200 ease-in';
@@ -5634,6 +5674,12 @@ function applyTabVisibility() {
         // Settings tab can't be hidden
         if (targetId === 'settings') {
             if (!firstVisibleTab) firstVisibleTab = targetId;
+            return;
+        }
+
+        // Always hide the performance tab
+        if (targetId === 'performance') {
+            link.classList.add('hidden');
             return;
         }
 
