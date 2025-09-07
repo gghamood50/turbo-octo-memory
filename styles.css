@@ -997,3 +997,10 @@ body {
 .tooltip-wrapper {
     display: inline-block;
 }
+
+.beta-tag {
+    font-size: 0.75rem;
+    color: #6b7280;
+    margin-left: 0.5rem;
+    vertical-align: middle;
+}
