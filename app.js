@@ -114,6 +114,11 @@ const usageTechnicianSelect = document.getElementById('usageTechnician');
 const inventoryPartsDatalist = document.getElementById('inventoryPartsList');
 const downloadPdfBtn = document.getElementById('downloadPdfBtn');
 
+const restockPartModal = document.getElementById('restockPartModal');
+const closeRestockPartModalButton = document.getElementById('closeRestockPartModal');
+const cancelRestockPartButton = document.getElementById('cancelRestockPart');
+const restockPartForm = document.getElementById('restockPartForm');
+
 const dashboardUnscheduledJobsEl = document.getElementById('dashboardUnscheduledJobs');
 const dashboardScheduledJobsEl = document.getElementById('dashboardScheduledJobs');
 const dashboardTotalJobsEl = document.getElementById('dashboardTotalJobs');
@@ -664,6 +669,7 @@ function renderInventory(items) {
                     <td><span class="status-pill ${statusClass}">${statusText}</span></td>
                     <td>
                         <button class="btn-secondary-stitch text-xs edit-part-btn" data-id="${item.id}">Edit</button>
+                        <button class="btn-primary-stitch text-xs restock-part-btn" data-id="${item.id}" data-part-name="${item.partName}">Restock</button>
                     </td>
                 </tr>
             `;
@@ -798,6 +804,47 @@ function openProviderClaimsWorkspace(providerName, invoices) { // Changed parame
         } else { 
             unclaimedList.appendChild(card); 
             unclaimedCount++; 
+        }
+    });
+
+    if(restockPartForm) restockPartForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const partId = document.getElementById('restockPartId').value;
+        const quantityToAdd = parseInt(document.getElementById('restockQuantity').value, 10);
+
+        if (!partId || !quantityToAdd || quantityToAdd <= 0) {
+            showMessage('Please enter a valid quantity to add.', 'error');
+            return;
+        }
+
+        const itemToUpdate = inventoryItemsData.find(item => item.id === partId);
+        if (!itemToUpdate) {
+            showMessage('Could not find the part to restock.', 'error');
+            return;
+        }
+
+        const partRef = firebase.firestore().doc(`inventoryItems/${partId}`);
+
+        try {
+            await partRef.update({
+                currentStock: firebase.firestore.FieldValue.increment(quantityToAdd)
+            });
+
+            // Add a log entry for auditing
+            await firebase.firestore().collection('inventoryRestockLog').add({
+                partId: partId,
+                sku: itemToUpdate.sku,
+                partName: itemToUpdate.partName,
+                quantityAdded: quantityToAdd,
+                loggedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+
+            showMessage(`Successfully restocked ${quantityToAdd} unit(s) of "${itemToUpdate.partName}".`, 'success');
+            closeRestockPartModal();
+
+        } catch (error) {
+            console.error("Error restocking part:", error);
+            showMessage(`Error restocking part: ${error.message}`, 'error');
         }
     });
 
@@ -1754,6 +1801,21 @@ function closeLogPartUsageModal() {
     logPartUsageForm.reset();
 }
 
+function openRestockPartModal(partId, partName) {
+    const restockPartIdInput = document.getElementById('restockPartId');
+    const modalTitle = restockPartModal.querySelector('.modal-header h2');
+
+    restockPartIdInput.value = partId;
+    modalTitle.textContent = `Restock "${partName}"`;
+    restockPartModal.style.display = 'block';
+    document.getElementById('restockQuantity').focus();
+}
+
+function closeRestockPartModal() {
+    restockPartModal.style.display = 'none';
+    document.getElementById('restockPartForm').reset();
+}
+
 // --- Firebase Logic ---
 let db;
 let auth;
@@ -2571,6 +2633,8 @@ if(saveInvoiceBtn) {
     if(cancelAddPartButton) cancelAddPartButton.addEventListener('click', closeAddPartModal);
     if(closeLogPartUsageModalButton) closeLogPartUsageModalButton.addEventListener('click', closeLogPartUsageModal);
     if(cancelLogPartUsageButton) cancelLogPartUsageButton.addEventListener('click', closeLogPartUsageModal);
+    if(closeRestockPartModalButton) closeRestockPartModalButton.addEventListener('click', closeRestockPartModal);
+    if(cancelRestockPartButton) cancelRestockPartButton.addEventListener('click', closeRestockPartModal);
     
     const rescheduleModal = document.getElementById('rescheduleModal');
     if (rescheduleModal) {
@@ -2931,6 +2995,11 @@ if(saveInvoiceBtn) {
             const partId = event.target.dataset.id;
             const partData = inventoryItemsData.find(p => p.id === partId);
             if(partData) openAddPartModal(partData); 
+        }
+        if (event.target.classList.contains('restock-part-btn')) {
+            const partId = event.target.dataset.id;
+            const partName = event.target.dataset.partName;
+            openRestockPartModal(partId, partName);
         }
         if (event.target.classList.contains('create-invoice-btn')) {
             const jobId = event.target.dataset.id;
