@@ -5815,6 +5815,7 @@ function initMap() {
     map = new google.maps.Map(mapDiv, {
         center: defaultCenter,
         zoom: 9,
+        mapId: 'DEMO_MAP_ID', // Required for Advanced Markers
     });
 
     // Set default date to today and fetch jobs
@@ -5860,13 +5861,10 @@ async function fetchAndRenderJobsOnMap(date) {
         
         jobs.forEach(job => {
             if (job.location && job.location.lat && job.location.lng) {
-                const marker = new google.maps.Marker({
+                const marker = new google.maps.marker.AdvancedMarkerElement({
                     position: job.location,
                     map: map,
                     title: `${job.customer} - ${job.address}`,
-                    icon: {
-                        url: 'http://maps.google.com/mapfiles/ms/icons/green-dot.png'
-                    }
                 });
 
                 marker.jobData = job; // Attach job data to the marker
