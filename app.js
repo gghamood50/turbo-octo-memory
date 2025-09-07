@@ -226,14 +226,28 @@ function renderJobs(jobs) {
     }).join('');
 }
 
-function openInvoiceViewModal(invoiceId) {
-    const invoice = allInvoicesData.find(inv => inv.id === invoiceId);
-    currentlyViewedInvoiceData = invoice;
+async function openInvoiceViewModal(invoiceId) {
+    let invoice = allInvoicesData.find(inv => inv.id === invoiceId);
+
+    // If not in cache, fetch fresh from DB
+    if (!invoice) {
+        try {
+            const invoiceDoc = await db.collection('invoices').doc(invoiceId).get();
+            if (invoiceDoc.exists) {
+                invoice = { id: invoiceDoc.id, ...invoiceDoc.data() };
+            }
+        } catch (e) {
+            console.error("Failed to fetch invoice from DB:", e);
+            showMessage('Error fetching invoice details.', 'error');
+            return;
+        }
+    }
 
     if (!invoice) {
         showMessage('Could not find invoice details.', 'error');
         return;
     }
+    currentlyViewedInvoiceData = invoice;
 
     const invoiceModalBody = document.getElementById('invoiceModalBody');
     const modalTitle = document.getElementById('modalInvoiceTitle');
@@ -1686,8 +1700,8 @@ async function openScheduleJobModal(job) {
         }
     }
     
-    scheduleJobModal.style.display = 'block';
     await updateModalState();
+    scheduleJobModal.style.display = 'block';
 }
 
 function closeScheduleJobModal() {
@@ -2871,7 +2885,7 @@ if(saveInvoiceBtn) {
 
 
     // Event Delegation for dynamic buttons
-    document.body.addEventListener('click', function(event) {
+    document.body.addEventListener('click', async function(event) {
         if (event.target.id === 'addTechnicianBtn') {
             openEditTechModal(null);
         }
@@ -2886,10 +2900,29 @@ if(saveInvoiceBtn) {
                 handleDeleteTechnician(techId);
             }
         }
-        if (event.target.classList.contains('schedule-job-btn')) {
-            const jobId = event.target.dataset.id;
-            const jobData = allJobsData.find(j => j.id === jobId);
-            if(jobData) openScheduleJobModal(jobData);
+        const scheduleBtn = event.target.closest('.schedule-job-btn');
+        if (scheduleBtn) {
+            const button = scheduleBtn;
+            const originalHtml = button.innerHTML;
+            button.disabled = true;
+            button.innerHTML = `<span class="material-icons-outlined text-lg animate-spin">sync</span>`;
+
+            try {
+                const jobId = button.dataset.id;
+                const jobDoc = await db.collection('jobs').doc(jobId).get();
+                if (jobDoc.exists) {
+                    const jobData = { id: jobDoc.id, ...jobDoc.data() };
+                    await openScheduleJobModal(jobData);
+                } else {
+                    showMessage("Job data could not be found.", "error");
+                }
+            } catch (error) {
+                console.error("Error opening schedule modal:", error);
+                showMessage("Could not open modal.", "error");
+            } finally {
+                button.disabled = false;
+                button.innerHTML = originalHtml;
+            }
         }
         if (event.target.classList.contains('edit-part-btn')) {
             const partId = event.target.dataset.id;
@@ -2907,8 +2940,20 @@ if(saveInvoiceBtn) {
         }
         const viewInvoiceBtn = event.target.closest('.view-invoice-btn');
         if (viewInvoiceBtn) {
-            const invoiceId = viewInvoiceBtn.dataset.id;
-            openInvoiceViewModal(invoiceId);
+            const button = viewInvoiceBtn;
+            const originalHtml = button.innerHTML;
+            button.disabled = true;
+            button.innerHTML = `<span class="material-icons-outlined text-lg animate-spin">sync</span>`;
+            try {
+                const invoiceId = button.dataset.id;
+                await openInvoiceViewModal(invoiceId);
+            } catch (error) {
+                console.error("Error opening invoice modal:", error);
+                showMessage("Could not open invoice details.", "error");
+            } finally {
+                button.disabled = false;
+                button.innerHTML = originalHtml;
+            }
         }
 
         // Unschedule button on trip sheets
@@ -3691,8 +3736,14 @@ if (sendAllInvoicesBtn) {
         const loginScreen = document.getElementById('loginScreen');
         const layoutContainer = document.getElementById('layoutContainer');
         const userAvatar = document.getElementById('userAvatar');
+        const appLoader = document.getElementById('appLoader');
 
         auth.onAuthStateChanged(async user => {
+            // Hide the main app loader once auth state is determined
+            if (appLoader) {
+                appLoader.style.display = 'none';
+            }
+
             if (user) {
                 // User is signed in
                 const userInitial = user.email ? user.email.charAt(0).toUpperCase() : 'U';
