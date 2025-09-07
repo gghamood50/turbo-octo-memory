@@ -153,10 +153,11 @@
                         </div>
                         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
                             <div class="lg:col-span-2 content-card-stitch">
-                                <h3 class="text-slate-800 text-lg font-semibold leading-normal">Technician Live Overview</h3>
-                                <div class="bg-slate-200 h-96 rounded-lg flex items-center justify-center text-slate-500">
-                                    <span class="material-icons-outlined text-5xl mr-2">map</span> Mock Map Area (Live Locations)
+                                <div class="flex justify-between items-center mb-4">
+                                     <h3 class="text-slate-800 text-lg font-semibold leading-normal">Jobs Awaiting Completion</h3>
+                                     <input type="date" id="map-date-picker" class="form-input form-input-sm py-1 px-2 border-slate-300 shadow-sm rounded-md">
                                 </div>
+                                <div id="jobs-map" class="h-96 rounded-lg bg-slate-200"></div>
                             </div>
                             <div class="content-card-stitch">
                                 <h3 class="text-slate-800 text-lg font-semibold leading-normal">Latest 5 Jobs</h3>
@@ -1305,6 +1306,7 @@
     <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.0.0/dist/signature_pad.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
     <script src="app.js"></script>
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyA7KZvWbdEBx8UAUcQrRGEBtGKFgo99C9s&callback=initMap" defer></script>
     <script>
         window.addEventListener('load', function() {
             const preloader = document.getElementById('bodyPreloader');
