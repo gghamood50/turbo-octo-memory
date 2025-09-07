@@ -1401,6 +1401,9 @@ function switchView(targetId) {
         }
     });
 
+    if (targetId === 'inventory') {
+        renderInventory(inventoryItemsData);
+    }
     if (targetId === 'schedule') {
         loadTripSheetsForDate(tripSheetDateInput.value);
     }
