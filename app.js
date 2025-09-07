@@ -807,47 +807,6 @@ function openProviderClaimsWorkspace(providerName, invoices) { // Changed parame
         }
     });
 
-    if(restockPartForm) restockPartForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const partId = document.getElementById('restockPartId').value;
-        const quantityToAdd = parseInt(document.getElementById('restockQuantity').value, 10);
-
-        if (!partId || !quantityToAdd || quantityToAdd <= 0) {
-            showMessage('Please enter a valid quantity to add.', 'error');
-            return;
-        }
-
-        const itemToUpdate = inventoryItemsData.find(item => item.id === partId);
-        if (!itemToUpdate) {
-            showMessage('Could not find the part to restock.', 'error');
-            return;
-        }
-
-        const partRef = firebase.firestore().doc(`inventoryItems/${partId}`);
-
-        try {
-            await partRef.update({
-                currentStock: firebase.firestore.FieldValue.increment(quantityToAdd)
-            });
-
-            // Add a log entry for auditing
-            await firebase.firestore().collection('inventoryRestockLog').add({
-                partId: partId,
-                sku: itemToUpdate.sku,
-                partName: itemToUpdate.partName,
-                quantityAdded: quantityToAdd,
-                loggedAt: firebase.firestore.FieldValue.serverTimestamp()
-            });
-
-            showMessage(`Successfully restocked ${quantityToAdd} unit(s) of "${itemToUpdate.partName}".`, 'success');
-            closeRestockPartModal();
-
-        } catch (error) {
-            console.error("Error restocking part:", error);
-            showMessage(`Error restocking part: ${error.message}`, 'error');
-        }
-    });
-
     if (unclaimedCount === 0) { unclaimedList.innerHTML = '<p class="text-center text-sm text-slate-500 p-4">No unclaimed invoices.</p>'; processAllBtn.classList.add('hidden'); } 
     else { processAllBtn.classList.remove('hidden'); }
     if (claimedCount === 0) claimedList.innerHTML = '<p class="text-center text-sm text-slate-500 p-4">No claimed invoices.</p>';
@@ -2872,6 +2831,7 @@ if(saveInvoiceBtn) {
     
     if(newPartForm) newPartForm.addEventListener('submit', async (e) => {
         e.preventDefault();
+        savePartButton.disabled = true;
         const partEditId = document.getElementById('partEditId').value;
         const partData = {
             partName: document.getElementById('partName').value,
@@ -2901,30 +2861,38 @@ if(saveInvoiceBtn) {
         } catch (error) {
             console.error("Error saving part:", error);
             alert(`Error saving part: ${error.message}`);
+        } finally {
+            savePartButton.disabled = false;
         }
     });
 
     if(logPartUsageForm) logPartUsageForm.addEventListener('submit', async (e) => {
         e.preventDefault();
+        const submitBtn = logPartUsageForm.querySelector('button[type="submit"]');
+        submitBtn.disabled = true;
+
         const skuToLog = document.getElementById('usagePartSKU').value;
         const quantityUsed = parseInt(document.getElementById('usageQuantity').value, 10);
         const technicianId = document.getElementById('usageTechnician').value;
         const jobId = document.getElementById('usageJobId').value;
 
         if (quantityUsed <= 0) {
-            alert("Quantity used must be greater than zero.");
+            showMessage("Quantity used must be greater than zero.", "error");
+            submitBtn.disabled = false;
             return;
         }
 
         const itemToUpdate = inventoryItemsData.find(item => item.sku === skuToLog);
 
         if (!itemToUpdate) {
-            alert(`Part with SKU "${skuToLog}" not found.`);
+            showMessage(`Part with SKU "${skuToLog}" not found.`, "error");
+            submitBtn.disabled = false;
             return;
         }
 
         if (itemToUpdate.currentStock < quantityUsed) {
-            alert(`Not enough stock for SKU "${skuToLog}". Available: ${itemToUpdate.currentStock}, Tried to use: ${quantityUsed}`);
+            showMessage(`Not enough stock for SKU "${skuToLog}". Available: ${itemToUpdate.currentStock}, Tried to use: ${quantityUsed}`, "error");
+            submitBtn.disabled = false;
             return;
         }
         
@@ -2942,11 +2910,62 @@ if(saveInvoiceBtn) {
                 jobId: jobId || null,
                 loggedAt: firebase.firestore.FieldValue.serverTimestamp()
             });
-
+            
+            showMessage('Part usage logged successfully.', 'success');
             closeLogPartUsageModal();
         } catch (error) {
             console.error("Error logging part usage:", error);
-            alert(`Error logging part usage: ${error.message}`);
+            showMessage(`Error logging part usage: ${error.message}`, 'error');
+        } finally {
+            submitBtn.disabled = false;
+        }
+    });
+
+    if(restockPartForm) restockPartForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const submitBtn = restockPartForm.querySelector('button[type="submit"]');
+        submitBtn.disabled = true;
+
+        const partId = document.getElementById('restockPartId').value;
+        const quantityToAdd = parseInt(document.getElementById('restockQuantity').value, 10);
+
+        if (!partId || !quantityToAdd || quantityToAdd <= 0) {
+            showMessage('Please enter a valid quantity to add.', 'error');
+            submitBtn.disabled = false;
+            return;
+        }
+
+        const itemToUpdate = inventoryItemsData.find(item => item.id === partId);
+        if (!itemToUpdate) {
+            showMessage('Could not find the part to restock.', 'error');
+            submitBtn.disabled = false;
+            return;
+        }
+
+        const partRef = firebase.firestore().doc(`inventoryItems/${partId}`);
+
+        try {
+            await partRef.update({
+                currentStock: firebase.firestore.FieldValue.increment(quantityToAdd)
+            });
+
+            // Add a log entry for auditing
+            await firebase.firestore().collection('inventoryRestockLog').add({
+                partId: partId,
+                sku: itemToUpdate.sku,
+                partName: itemToUpdate.partName,
+                quantityAdded: quantityToAdd,
+                loggedAt: firebase.firestore.FieldValue.serverTimestamp()
+            });
+
+            showMessage(`Successfully restocked ${quantityToAdd} unit(s) of "${itemToUpdate.partName}".`, 'success');
+            closeRestockPartModal();
+
+        } catch (error) {
+            console.error("Error restocking part:", error);
+            showMessage(`Error restocking part: ${error.message}`, 'error');
+        } finally {
+            submitBtn.disabled = false;
         }
     });
 
