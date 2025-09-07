@@ -5836,7 +5836,7 @@ async function fetchAndRenderJobsOnMap(date) {
     if (!map) return;
 
     // Clear existing markers
-    mapMarkers.forEach(marker => marker.setMap(null));
+    mapMarkers.forEach(marker => marker.map = null);
     mapMarkers = [];
     
     const mapDiv = document.getElementById('jobs-map');
@@ -5887,7 +5887,7 @@ async function fetchAndRenderJobsOnMap(date) {
                 });
 
                 mapMarkers.push(marker);
-                bounds.extend(marker.getPosition());
+                bounds.extend(marker.position);
             }
         });
 
