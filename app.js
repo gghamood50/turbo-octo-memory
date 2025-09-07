@@ -14,6 +14,7 @@ const ASK_DANIEL_URL = 'https://ask-daniel-216681158749.us-central1.run.app';
 const SEND_SCHEDULING_LINKS_URL = 'https://send-manual-scheduling-links-216681158749.us-central1.run.app';
 const SEND_HOMEGUARD_CLAIM_URL = 'https://send-homeguard-claim-216681158749.us-central1.run.app';
 const UPLOAD_INVOICE_IMAGE_URL = 'https://upload-invoice-image-216681158749.us-central1.run.app/upload';
+const GET_JOBS_FOR_MAP_URL = 'https://get-jobs-for-map-216681158749.us-central1.run.app/getJobsForMap';
 
 // --- Global State ---
 let allJobsData = [];
@@ -46,6 +47,10 @@ let currentFilteredData = [];
 let currentJobToReschedule = null;
 let currentWorkerTechnicianId = null;
 let invoiceImageFiles = [];
+
+// --- Map State ---
+let map;
+let mapMarkers = [];
 
 
 // --- DOM Elements ---
@@ -5791,3 +5796,109 @@ function applyTabVisibility() {
 }
 
 // --- End Tab Visibility Settings ---
+
+// --- Google Map Functions ---
+
+// initMap is called by the Google Maps script tag in index.html
+function initMap() {
+    const mapDatePicker = document.getElementById('map-date-picker');
+    const mapDiv = document.getElementById('jobs-map');
+
+    if (!mapDiv || !mapDatePicker) {
+        console.log("Map components not on this page. Skipping map initialization.");
+        return;
+    }
+
+    // Set a default center, e.g., Los Angeles
+    const defaultCenter = { lat: 34.0522, lng: -118.2437 };
+
+    map = new google.maps.Map(mapDiv, {
+        center: defaultCenter,
+        zoom: 9,
+    });
+
+    // Set default date to today and fetch jobs
+    const today = new Date().toISOString().split('T')[0];
+    mapDatePicker.value = today;
+    fetchAndRenderJobsOnMap(today);
+
+    // Add listener for date changes
+    mapDatePicker.addEventListener('change', () => {
+        const selectedDate = mapDatePicker.value;
+        if (selectedDate) {
+            fetchAndRenderJobsOnMap(selectedDate);
+        }
+    });
+}
+
+async function fetchAndRenderJobsOnMap(date) {
+    if (!map) return;
+
+    // Clear existing markers
+    mapMarkers.forEach(marker => marker.setMap(null));
+    mapMarkers = [];
+    
+    const mapDiv = document.getElementById('jobs-map');
+    mapDiv.innerHTML = '<div class="flex items-center justify-center h-full text-slate-500"><span class="material-icons-outlined text-xl animate-spin mr-2">sync</span>Loading jobs...</div>';
+
+
+    try {
+        const response = await fetch(`${GET_JOBS_FOR_MAP_URL}?date=${date}`);
+        if (!response.ok) {
+            throw new Error(`Server responded with ${response.status}`);
+        }
+        const jobs = await response.json();
+        
+        mapDiv.innerHTML = ''; // Clear loading message
+
+        if (jobs.length === 0) {
+             mapDiv.innerHTML = '<div class="flex items-center justify-center h-full text-slate-500"><span class="material-icons-outlined text-xl mr-2">map</span>No jobs awaiting completion for this date.</div>';
+            return;
+        }
+
+        const bounds = new google.maps.LatLngBounds();
+        
+        jobs.forEach(job => {
+            if (job.location && job.location.lat && job.location.lng) {
+                const marker = new google.maps.Marker({
+                    position: job.location,
+                    map: map,
+                    title: `${job.customer} - ${job.address}`,
+                    icon: {
+                        url: 'http://maps.google.com/mapfiles/ms/icons/green-dot.png'
+                    }
+                });
+
+                marker.jobData = job; // Attach job data to the marker
+
+                marker.addListener('click', async () => {
+                    // Fetch the latest job data before opening the modal
+                    try {
+                        const jobDoc = await db.collection('jobs').doc(marker.jobData.id).get();
+                        if (jobDoc.exists) {
+                            openScheduleJobModal({ id: jobDoc.id, ...jobDoc.data() });
+                        } else {
+                            // Fallback to the data we have if the fresh fetch fails
+                            openScheduleJobModal(marker.jobData);
+                            showMessage("Couldn't fetch latest details, showing cached info.", "info");
+                        }
+                    } catch (e) {
+                        console.error("Error fetching fresh job data on marker click:", e);
+                        openScheduleJobModal(marker.jobData);
+                    }
+                });
+
+                mapMarkers.push(marker);
+                bounds.extend(marker.getPosition());
+            }
+        });
+
+        if (mapMarkers.length > 0) {
+            map.fitBounds(bounds);
+        }
+
+    } catch (error) {
+        console.error('Error fetching jobs for map:', error);
+        mapDiv.innerHTML = '<div class="flex items-center justify-center h-full text-red-500"><span class="material-icons-outlined text-xl mr-2">error</span>Failed to load jobs.</div>';
+    }
+}
