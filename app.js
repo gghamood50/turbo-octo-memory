@@ -5815,7 +5815,7 @@ function initMap() {
     map = new google.maps.Map(mapDiv, {
         center: defaultCenter,
         zoom: 9,
-        mapId: 'DEMO_MAP_ID', // Required for Advanced Markers
+        mapId: 'f90500cb91192de0c773a963', // Required for Advanced Markers
     });
 
     // Set default date to today and fetch jobs
