@@ -1114,7 +1114,7 @@
     <div id="addPartModal" class="modal">
         <div class="modal-content">
             <div class="modal-header"><h2>Add New Inventory Part</h2><span class="close-button" id="closeAddPartModal">&times;</span></div>
-            <form id="newPartForm" class="space-y-4">
+            <form id="newPartForm" class="space-y-4 p-6">
                 <input type="hidden" id="partEditId">
                 <div><label for="partName" class="form-label">Part Name</label><input type="text" id="partName" class="form-input" placeholder="e.g., Torsion Spring 2-inch" required></div>
                 <div><label for="partSKU" class="form-label">SKU / Part Number</label><input type="text" id="partSKU" class="form-input" placeholder="e.g., TS-002-HD" required></div>
@@ -1132,7 +1132,7 @@
     <div id="logPartUsageModal" class="modal">
         <div class="modal-content">
             <div class="modal-header"><h2>Log Part Usage</h2><span class="close-button" id="closeLogPartUsageModal">&times;</span></div>
-            <form id="logPartUsageForm" class="space-y-4">
+            <form id="logPartUsageForm" class="space-y-4 p-6">
                 <div>
                     <label for="usagePartSKU" class="form-label">Part SKU / Name</label>
                     <input type="text" id="usagePartSKU" class="form-input" placeholder="Search SKU or Name..." list="inventoryPartsList" required>
@@ -1150,6 +1150,27 @@
             </form>
         </div>
     </div>
+
+    <div id="restockPartModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Restock Part</h2>
+                <span class="close-button" id="closeRestockPartModal">&times;</span>
+            </div>
+            <form id="restockPartForm" class="space-y-4 p-6">
+                <input type="hidden" id="restockPartId">
+                <div>
+                    <label for="restockQuantity" class="form-label">Quantity to Add</label>
+                    <input type="number" id="restockQuantity" class="form-input" min="1" required>
+                </div>
+                <div class="flex justify-end space-x-3 pt-2">
+                    <button type="button" id="cancelRestockPart" class="btn-secondary-stitch bg-slate-200 text-slate-700 border-slate-300 hover:bg-slate-300">Cancel</button>
+                    <button type="submit" class="btn-primary-stitch">Confirm Restock</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <div id="scheduleJobModal" class="modal">
         <div class="modal-content bg-slate-50 shadow-2xl border-2 border-slate-200 !p-0">
             <div class="modal-header bg-white px-6 py-4 rounded-t-lg border-b">
