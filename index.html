@@ -152,7 +152,7 @@
                             </div>
                         </div>
                         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
-                            <div class="lg:col-span-2 content-card-stitch">
+                            <div class="lg:col-span-2 content-card-stitch relative">
                                 <div class="flex justify-between items-center mb-4">
                                      <h3 class="text-slate-800 text-lg font-semibold leading-normal">Jobs Awaiting Completion</h3>
                                      <input type="date" id="map-date-picker" class="form-input form-input-sm py-1 px-2 border-slate-300 shadow-sm rounded-md">
@@ -1306,110 +1306,6 @@
     <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.0.0/dist/signature_pad.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
     <script src="app.js"></script>
-    <script>
-        // --- Google Map Functions ---
-        
-        // initMap is called by the Google Maps script tag in index.html
-        function initMap() {
-            const mapDatePicker = document.getElementById('map-date-picker');
-            const mapDiv = document.getElementById('jobs-map');
-        
-            if (!mapDiv || !mapDatePicker) {
-                console.log("Map components not on this page. Skipping map initialization.");
-                return;
-            }
-        
-            // Set a default center, e.g., Los Angeles
-            const defaultCenter = { lat: 34.0522, lng: -118.2437 };
-        
-            map = new google.maps.Map(mapDiv, {
-                center: defaultCenter,
-                zoom: 9,
-            });
-        
-            // Set default date to today and fetch jobs
-            const today = new Date().toISOString().split('T')[0];
-            mapDatePicker.value = today;
-            fetchAndRenderJobsOnMap(today);
-        
-            // Add listener for date changes
-            mapDatePicker.addEventListener('change', () => {
-                const selectedDate = mapDatePicker.value;
-                if (selectedDate) {
-                    fetchAndRenderJobsOnMap(selectedDate);
-                }
-            });
-        }
-        
-        async function fetchAndRenderJobsOnMap(date) {
-            if (!map) return;
-        
-            // Clear existing markers
-            mapMarkers.forEach(marker => marker.map = null);
-            mapMarkers = [];
-            
-            const mapDiv = document.getElementById('jobs-map');
-            mapDiv.innerHTML = '<div class="flex items-center justify-center h-full text-slate-500"><span class="material-icons-outlined text-xl animate-spin mr-2">sync</span>Loading jobs...</div>';
-        
-        
-            try {
-                const response = await fetch(`${GET_JOBS_FOR_MAP_URL}?date=${date}`);
-                if (!response.ok) {
-                    throw new Error(`Server responded with ${response.status}`);
-                }
-                const jobs = await response.json();
-                
-                mapDiv.innerHTML = ''; // Clear loading message
-        
-                if (jobs.length === 0) {
-                     mapDiv.innerHTML = '<div class="flex items-center justify-center h-full text-slate-500"><span class="material-icons-outlined text-xl mr-2">map</span>No jobs awaiting completion for this date.</div>';
-                    return;
-                }
-        
-                const bounds = new google.maps.LatLngBounds();
-                
-                jobs.forEach(job => {
-                    if (job.location && job.location.lat && job.location.lng) {
-                        const marker = new google.maps.Marker({
-                            position: job.location,
-                            map: map,
-                            title: `${job.customer} - ${job.address}`,
-                        });
-        
-                        marker.jobData = job; // Attach job data to the marker
-        
-                        marker.addListener('click', async () => {
-                            // Fetch the latest job data before opening the modal
-                            try {
-                                const jobDoc = await db.collection('jobs').doc(marker.jobData.id).get();
-                                if (jobDoc.exists) {
-                                    openScheduleJobModal({ id: jobDoc.id, ...jobDoc.data() });
-                                } else {
-                                    // Fallback to the data we have if the fresh fetch fails
-                                    openScheduleJobModal(marker.jobData);
-                                    showMessage("Couldn't fetch latest details, showing cached info.", "info");
-                                }
-                            } catch (e) {
-                                console.error("Error fetching fresh job data on marker click:", e);
-                                openScheduleJobModal(marker.jobData);
-                            }
-                        });
-        
-                        mapMarkers.push(marker);
-                        bounds.extend(marker.position);
-                    }
-                });
-        
-                if (mapMarkers.length > 0) {
-                    map.fitBounds(bounds);
-                }
-        
-            } catch (error) {
-                console.error('Error fetching jobs for map:', error);
-                mapDiv.innerHTML = '<div class="flex items-center justify-center h-full text-red-500"><span class="material-icons-outlined text-xl mr-2">error</span>Failed to load jobs.</div>';
-            }
-        }
-        </script>
     <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyA7KZvWbdEBx8UAUcQrRGEBtGKFgo99C9s&callback=initMap" async></script>
     <script>
         window.addEventListener('load', function() {
