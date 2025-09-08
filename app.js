@@ -5791,3 +5791,125 @@ function applyTabVisibility() {
 }
 
 // --- End Tab Visibility Settings ---
+
+// --- Google Map Functions ---
+let map = null;
+let mapMarkers = [];
+
+function initMap() {
+    const mapDatePicker = document.getElementById('map-date-picker');
+    const mapDiv = document.getElementById('jobs-map');
+
+    if (!mapDiv || !mapDatePicker) {
+        console.log("Map components not on this page. Skipping map initialization.");
+        return;
+    }
+
+    // Set a default center, e.g., Los Angeles
+    const defaultCenter = { lat: 34.0522, lng: -118.2437 };
+
+    map = new google.maps.Map(mapDiv, {
+        center: defaultCenter,
+        zoom: 9,
+    });
+
+    // Set default date to today and fetch jobs
+    const today = new Date().toISOString().split('T')[0];
+    mapDatePicker.value = today;
+    fetchAndRenderJobsOnMap(today);
+
+    // Add listener for date changes
+    mapDatePicker.addEventListener('change', () => {
+        const selectedDate = mapDatePicker.value;
+        if (selectedDate) {
+            fetchAndRenderJobsOnMap(selectedDate);
+        }
+    });
+}
+
+async function fetchAndRenderJobsOnMap(date) {
+    if (!map) return;
+
+    // Clear existing markers
+    mapMarkers.forEach(marker => marker.setMap(null));
+    mapMarkers = [];
+    
+    const mapContainer = document.getElementById('jobs-map').parentElement;
+    
+    // Show loading overlay
+    const loadingOverlay = document.createElement('div');
+    loadingOverlay.id = 'map-loading-overlay';
+    loadingOverlay.className = 'absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-10';
+    loadingOverlay.innerHTML = '<span class="material-icons-outlined text-xl animate-spin mr-2">sync</span>Loading jobs...';
+    mapContainer.appendChild(loadingOverlay);
+
+    try {
+        const response = await fetch(`${GET_JOBS_FOR_MAP_URL}?date=${date}`);
+        if (!response.ok) {
+            throw new Error(`Server responded with ${response.status}`);
+        }
+        const jobs = await response.json();
+        
+        // Remove loading overlay
+        const overlay = document.getElementById('map-loading-overlay');
+        if (overlay) overlay.remove();
+
+        if (jobs.length === 0) {
+            const noJobsOverlay = document.createElement('div');
+            noJobsOverlay.id = 'map-no-jobs-overlay';
+            noJobsOverlay.className = 'absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-10';
+            noJobsOverlay.innerHTML = '<span class="material-icons-outlined text-xl mr-2">map</span>No jobs awaiting completion for this date.';
+            mapContainer.appendChild(noJobsOverlay);
+            return;
+        }
+
+        const bounds = new google.maps.LatLngBounds();
+        
+        jobs.forEach(job => {
+            if (job.location && job.location.lat && job.location.lng) {
+                const marker = new google.maps.Marker({
+                    position: job.location,
+                    map: map,
+                    title: `${job.customer} - ${job.address}`,
+                });
+
+                marker.jobData = job; // Attach job data to the marker
+
+                marker.addListener('click', async () => {
+                    // Fetch the latest job data before opening the modal
+                    try {
+                        const jobDoc = await db.collection('jobs').doc(marker.jobData.id).get();
+                        if (jobDoc.exists) {
+                            openScheduleJobModal({ id: jobDoc.id, ...jobDoc.data() });
+                        } else {
+                            // Fallback to the data we have if the fresh fetch fails
+                            openScheduleJobModal(marker.jobData);
+                            showMessage("Couldn't fetch latest details, showing cached info.", "info");
+                        }
+                    } catch (e) {
+                        console.error("Error fetching fresh job data on marker click:", e);
+                        openScheduleJobModal(marker.jobData);
+                    }
+                });
+
+                mapMarkers.push(marker);
+                bounds.extend(marker.position);
+            }
+        });
+
+        if (mapMarkers.length > 0) {
+            map.fitBounds(bounds);
+        }
+
+    } catch (error) {
+        console.error('Error fetching jobs for map:', error);
+        const overlay = document.getElementById('map-loading-overlay');
+        if (overlay) overlay.remove();
+        
+        const errorOverlay = document.createElement('div');
+        errorOverlay.id = 'map-error-overlay';
+        errorOverlay.className = 'absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-10 text-red-500';
+        errorOverlay.innerHTML = '<span class="material-icons-outlined text-xl mr-2">error</span>Failed to load jobs.';
+        mapContainer.appendChild(errorOverlay);
+    }
+}
