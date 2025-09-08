@@ -48,11 +48,6 @@ let currentJobToReschedule = null;
 let currentWorkerTechnicianId = null;
 let invoiceImageFiles = [];
 
-// --- Map State ---
-let map;
-let mapMarkers = [];
-
-
 // --- DOM Elements ---
 const tabVisibilityContainer = document.getElementById('tab-visibility-container');
 const invoiceSearchInput = document.getElementById('invoiceSearchInput');
