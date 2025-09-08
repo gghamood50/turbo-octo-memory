@@ -1325,7 +1325,6 @@
             map = new google.maps.Map(mapDiv, {
                 center: defaultCenter,
                 zoom: 9,
-                mapId: 'f90500cb91192de0c773a963', // Required for Advanced Markers
             });
         
             // Set default date to today and fetch jobs
@@ -1371,7 +1370,7 @@
                 
                 jobs.forEach(job => {
                     if (job.location && job.location.lat && job.location.lng) {
-                        const marker = new google.maps.marker.AdvancedMarkerElement({
+                        const marker = new google.maps.Marker({
                             position: job.location,
                             map: map,
                             title: `${job.customer} - ${job.address}`,
@@ -1411,7 +1410,7 @@
             }
         }
         </script>
-    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyA7KZvWbdEBx8UAUcQrRGEBtGKFgo99C9s&callback=initMap&libraries=marker" async></script>
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyA7KZvWbdEBx8UAUcQrRGEBtGKFgo99C9s&callback=initMap" async></script>
     <script>
         window.addEventListener('load', function() {
             const preloader = document.getElementById('bodyPreloader');
