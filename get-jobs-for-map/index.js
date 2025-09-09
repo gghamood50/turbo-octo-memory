@@ -18,7 +18,7 @@ exports.getJobsForMap = functions.https.onRequest((req, res) => {
             }
 
             const jobsQuery = db.collection('jobs')
-                .where('status', '==', 'Awaiting completion')
+                .where('status', 'in', ['Awaiting completion', 'Scheduled', 'Completed'])
                 .where('scheduledDate', '==', date);
             
             const snapshot = await jobsQuery.get();
