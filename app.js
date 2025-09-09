@@ -1338,9 +1338,12 @@ function showWorkerJobDetails(job) {
         <div class="flex justify-center">
           <div class="flex flex-1 gap-3 max-w-[480px] flex-col items-stretch px-4 py-3">
             <button
-              class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-[#0c7ff2] text-white text-sm font-bold leading-normal tracking-[0.015em] w-full"
+              id="onMyWayBtn"
+              data-id="${job.id}"
+              class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-[#0c7ff2] text-white text-sm font-bold leading-normal tracking-[0.015em] w-full disabled:bg-slate-400 disabled:cursor-not-allowed"
+              ${job.onMyWayMessageSent ? 'disabled' : ''}
             >
-              <span class="truncate">On My Way!</span>
+              <span class="truncate">${job.onMyWayMessageSent ? 'Message Sent' : 'On My Way!'}</span>
             </button>
             <button
               class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-[#f0f2f5] text-[#111418] text-sm font-bold leading-normal tracking-[0.015em] w-full"
@@ -3433,6 +3436,12 @@ if(saveInvoiceBtn) {
                 if (jobId) {
                     showInvoiceScreen(jobId);
                 }
+            }
+
+            const onMyWayButton = event.target.closest('#onMyWayBtn');
+            if (onMyWayButton) {
+                const jobId = onMyWayButton.dataset.id;
+                sendOnMyWayMessage(jobId);
             }
         });
     }
@@ -5791,6 +5800,52 @@ function applyTabVisibility() {
 }
 
 // --- End Tab Visibility Settings ---
+
+async function sendOnMyWayMessage(jobId) {
+    const onMyWayBtn = document.getElementById('onMyWayBtn');
+    if (!jobId) {
+        showMessage('Cannot send message: Job ID is missing.', 'error');
+        return;
+    }
+
+    if (onMyWayBtn) {
+        onMyWayBtn.disabled = true;
+        onMyWayBtn.innerHTML = `<span class="material-icons-outlined text-lg animate-spin">sync</span> Sending...`;
+    }
+
+    try {
+        const response = await fetch(SEND_SCHEDULING_LINKS_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ jobId: jobId, messageType: 'onMyWay' })
+        });
+
+        const result = await response.json();
+
+        if (!response.ok || !result.success) {
+            throw new Error(result.message || `Server responded with status ${response.status}`);
+        }
+
+        showMessage(result.message, 'success');
+        if (onMyWayBtn) {
+            onMyWayBtn.innerHTML = `<span class="truncate">Message Sent</span>`;
+        }
+
+        // Update the local job data to reflect the change
+        const job = currentWorkerAssignedJobs.find(j => j.id === jobId);
+        if (job) {
+            job.onMyWayMessageSent = true;
+        }
+
+    } catch (error) {
+        console.error('Error sending "On my way!" message:', error);
+        showMessage(error.message, 'error');
+        if (onMyWayBtn) {
+            onMyWayBtn.disabled = false;
+            onMyWayBtn.innerHTML = `<span class="truncate">On My Way!</span>`;
+        }
+    }
+}
 
 // --- Google Map Functions ---
 let map = null;
