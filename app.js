@@ -5889,15 +5889,11 @@ async function fetchAndRenderJobsOnMap(date) {
         if (overlay) overlay.remove();
 
         if (jobs.length === 0) {
-            const noJobsOverlay = document.createElement('div');
-            noJobsOverlay.id = 'map-no-jobs-overlay';
-            noJobsOverlay.className = 'absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-10';
-            noJobsOverlay.innerHTML = '<span class="material-icons-outlined text-xl mr-2">map</span>No jobs awaiting completion for this date.';
-            mapContainer.appendChild(noJobsOverlay);
              // Still fit map to HQ marker if no jobs
             const bounds = new google.maps.LatLngBounds();
             bounds.extend(hqPosition);
             map.fitBounds(bounds);
+            map.setZoom(9); // Set a reasonable zoom level when only HQ is shown
             return;
         }
 
@@ -5906,19 +5902,66 @@ async function fetchAndRenderJobsOnMap(date) {
 
         jobs.forEach(job => {
             if (job.location && job.location.lat && job.location.lng) {
-                const marker = new google.maps.Marker({
+                let markerOptions = {
                     position: job.location,
                     map: map,
-                    title: `${job.customer} - ${job.address}`,
-                    icon: {
-                        path: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z',
-                        fillColor: '#059669', // Green for jobs
-                        fillOpacity: 1,
-                        strokeWeight: 0,
-                        scale: 1.5,
-                        anchor: new google.maps.Point(12, 24)
-                    }
-                });
+                    title: `${job.customer} - ${job.address}`
+                };
+
+                // Default pin path
+                const pinPath = 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z';
+
+                switch (job.status) {
+                    case 'Awaiting completion':
+                        markerOptions.icon = {
+                            path: pinPath,
+                            fillColor: '#3B82F6', // Blue
+                            fillOpacity: 1,
+                            strokeWeight: 0,
+                            scale: 1.5,
+                            anchor: new google.maps.Point(12, 24)
+                        };
+                        break;
+                    case 'Scheduled':
+                        markerOptions.icon = {
+                            path: pinPath,
+                            fillColor: '#10B981', // Green
+                            fillOpacity: 1,
+                            strokeWeight: 0,
+                            scale: 1.5,
+                            anchor: new google.maps.Point(12, 24)
+                        };
+                        break;
+                    case 'Completed':
+                        markerOptions.icon = {
+                            path: 'M 0, 0 m -10, 0 a 10,10 0 1,0 20,0 a 10,10 0 1,0 -20,0', // Solid circle
+                            fillColor: '#10B981', // Green
+                            fillOpacity: 1,
+                            strokeWeight: 0,
+                            scale: 1.2,
+                            anchor: new google.maps.Point(0, 0),
+                            labelOrigin: new google.maps.Point(0, 0.5) // Center the checkmark
+                        };
+                        markerOptions.label = {
+                            text: '\u2713', // Unicode checkmark
+                            color: 'white',
+                            fontSize: '14px',
+                            fontWeight: 'bold',
+                        };
+                        break;
+                    default:
+                        // Default marker for any other status
+                        markerOptions.icon = {
+                            path: pinPath,
+                            fillColor: '#6B7280', // Gray
+                            fillOpacity: 1,
+                            strokeWeight: 0,
+                            scale: 1.5,
+                            anchor: new google.maps.Point(12, 24)
+                        };
+                }
+
+                const marker = new google.maps.Marker(markerOptions);
 
                 marker.jobData = job; // Attach job data to the marker
 
