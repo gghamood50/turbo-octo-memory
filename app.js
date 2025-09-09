@@ -5836,12 +5836,46 @@ async function fetchAndRenderJobsOnMap(date) {
     
     const mapContainer = document.getElementById('jobs-map').parentElement;
     
+    // Remove any previous overlays
+    const existingNoJobsOverlay = document.getElementById('map-no-jobs-overlay');
+    if (existingNoJobsOverlay) existingNoJobsOverlay.remove();
+    const existingErrorOverlay = document.getElementById('map-error-overlay');
+    if (existingErrorOverlay) existingErrorOverlay.remove();
+    
     // Show loading overlay
     const loadingOverlay = document.createElement('div');
     loadingOverlay.id = 'map-loading-overlay';
     loadingOverlay.className = 'absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-10';
     loadingOverlay.innerHTML = '<span class="material-icons-outlined text-xl animate-spin mr-2">sync</span>Loading jobs...';
     mapContainer.appendChild(loadingOverlay);
+
+    // Add HQ Marker
+    const hqPosition = { lat: 33.720, lng: -117.915 };
+    const hqIcon = {
+        path: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z',
+        fillColor: '#000000', // Black for HQ
+        fillOpacity: 1,
+        strokeWeight: 2,
+        strokeColor: 'white',
+        scale: 2,
+        anchor: new google.maps.Point(12, 24),
+        labelOrigin: new google.maps.Point(12, 10)
+    };
+    const hqMarker = new google.maps.Marker({
+        position: hqPosition,
+        map: map,
+        title: 'HQ - 2921 W Central Ave Unit C, Santa Ana, CA 92704',
+        icon: hqIcon,
+        label: {
+            text: 'HQ',
+            color: 'white',
+            fontSize: '10px',
+            fontWeight: 'bold'
+        },
+        zIndex: 1000 // Ensure HQ is on top
+    });
+    mapMarkers.push(hqMarker);
+
 
     try {
         const response = await fetch(`${GET_JOBS_FOR_MAP_URL}?date=${date}`);
@@ -5860,17 +5894,30 @@ async function fetchAndRenderJobsOnMap(date) {
             noJobsOverlay.className = 'absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-10';
             noJobsOverlay.innerHTML = '<span class="material-icons-outlined text-xl mr-2">map</span>No jobs awaiting completion for this date.';
             mapContainer.appendChild(noJobsOverlay);
+             // Still fit map to HQ marker if no jobs
+            const bounds = new google.maps.LatLngBounds();
+            bounds.extend(hqPosition);
+            map.fitBounds(bounds);
             return;
         }
 
         const bounds = new google.maps.LatLngBounds();
-        
+        bounds.extend(hqPosition); // Include HQ in bounds
+
         jobs.forEach(job => {
             if (job.location && job.location.lat && job.location.lng) {
                 const marker = new google.maps.Marker({
                     position: job.location,
                     map: map,
                     title: `${job.customer} - ${job.address}`,
+                    icon: {
+                        path: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z',
+                        fillColor: '#059669', // Green for jobs
+                        fillOpacity: 1,
+                        strokeWeight: 0,
+                        scale: 1.5,
+                        anchor: new google.maps.Point(12, 24)
+                    }
                 });
 
                 marker.jobData = job; // Attach job data to the marker
@@ -5897,7 +5944,7 @@ async function fetchAndRenderJobsOnMap(date) {
             }
         });
 
-        if (mapMarkers.length > 0) {
+        if (mapMarkers.length > 1) { // More than just the HQ marker
             map.fitBounds(bounds);
         }
 
