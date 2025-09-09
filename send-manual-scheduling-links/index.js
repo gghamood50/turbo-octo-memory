@@ -17,12 +17,12 @@ const TWILIO_PHONE_SECRET_NAME = 'projects/216681158749/secrets/twilio-phone-num
 exports['send-manual-scheduling-links'] = onRequest({ cors: true }, async (req, res) => {
     console.log("--- 'send-manual-scheduling-links' function triggered. Body: ", req.body);
 
-    const { jobId } = req.body;
+    const { jobId, messageType } = req.body;
 
     // --- Single Job Logic ---
     if (jobId) {
         try {
-            console.log(`Processing single job with ID: ${jobId}`);
+            console.log(`Processing single job with ID: ${jobId}, messageType: ${messageType}`);
             const jobDoc = await firestore.collection('jobs').doc(jobId).get();
             if (!jobDoc.exists) {
                 console.error(`Job with ID ${jobId} not found.`);
@@ -44,9 +44,18 @@ exports['send-manual-scheduling-links'] = onRequest({ cors: true }, async (req, 
             const authToken = tokenVersion.payload.data.toString('utf8');
             const twilioPhoneNumber = phoneVersion.payload.data.toString('utf8');
             const twilioClient = twilio(accountSid, authToken);
+            
+            let messageBody;
+            let updateData;
 
-            const schedulingUrl = `https://safewayos2.firebaseapp.com/scheduling.html?jobId=${jobId}`;
-            const messageBody = `Hello ${jobData.customer || 'Valued Customer'}, this is Safeway Garage Solutions. Please use this link to schedule your service appointment: ${schedulingUrl}`;
+            if (messageType === 'onMyWay') {
+                messageBody = `Hey ${jobData.customer || "Valued Customer"} the technician will reach your location in approximately 30 minutes!`;
+                updateData = { onMyWayMessageSent: true };
+            } else {
+                const schedulingUrl = `https://safewayos2.firebaseapp.com/scheduling.html?jobId=${jobId}`;
+                messageBody = `Hello ${jobData.customer || 'Valued Customer'}, this is Safeway Garage Solutions. Please use this link to schedule your service appointment: ${schedulingUrl}`;
+                updateData = { status: "Link Sent!", linkSentAt: admin.firestore.FieldValue.serverTimestamp() };
+            }
 
             const message = await twilioClient.messages.create({
                 body: messageBody,
@@ -57,14 +66,14 @@ exports['send-manual-scheduling-links'] = onRequest({ cors: true }, async (req, 
             console.log(`Twilio reported SUCCESS for job ${jobId}. Message SID: ${message.sid}`);
             
             const jobRef = firestore.collection('jobs').doc(jobId);
-            await jobRef.update({ status: "Link Sent!", linkSentAt: admin.firestore.FieldValue.serverTimestamp() });
+            await jobRef.update(updateData);
             
-            return res.status(200).send({ success: true, message: "Scheduling link sent successfully!" });
+            const successMessage = messageType === 'onMyWay' ? "'On my way!' message sent successfully." : "Scheduling link sent successfully!";
+            return res.status(200).send({ success: true, message: successMessage });
 
         } catch (err) {
             console.error(`A critical error occurred while processing job ${jobId}:`, err);
-            // Check if it's a Twilio error and provide a more specific message
-            if (err.code) { // Twilio errors often have a 'code' property
+            if (err.code) { 
                  return res.status(500).send({ success: false, message: `Failed to send SMS: ${err.message}` });
             }
             return res.status(500).send({ success: false, message: "An internal server error occurred." });
