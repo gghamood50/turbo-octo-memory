@@ -760,22 +760,31 @@ function renderProviderCardCounts(invoices) {
     document.getElementById('othersStats').innerHTML = `${providers.others.count} <span class="provider-card-subtext">${formatCurrency(providers.others.value)}</span>`;
 }
 
-function openProviderClaimsWorkspace(providerName, invoices) { // Changed parameter name
+function openProviderClaimsWorkspace(providerName, invoices) {
     currentProvider = providerName;
     const modalTitle = document.getElementById('providerModalTitle');
     const unclaimedList = document.getElementById('unclaimedInvoicesList');
     const claimedList = document.getElementById('claimedInvoicesList');
     const processAllBtn = document.getElementById('processAllBtn');
     const providerInvoiceListOverlay = document.getElementById('providerInvoiceListOverlay');
-    if (!providerInvoiceListOverlay || !modalTitle || !unclaimedList || !claimedList) return;
+    const claimsEmailInputContainer = document.getElementById('claimsEmailInput')?.parentElement;
+
+    if (!providerInvoiceListOverlay || !modalTitle || !unclaimedList || !claimedList || !processAllBtn || !claimsEmailInputContainer) return;
+
+    // Conditionally show/hide email input and process all button
+    if (providerName.toLowerCase() === 'home guard') {
+        claimsEmailInputContainer.style.display = 'block';
+    } else {
+        claimsEmailInputContainer.style.display = 'none';
+        processAllBtn.style.display = 'none';
+    }
 
     modalTitle.textContent = `${providerName} Claims`;
     unclaimedList.innerHTML = '';
     claimedList.innerHTML = '';
-    
+
     const providerKey = providerName.toLowerCase();
 
-    // Filter the flat invoice list directly
     const filteredInvoices = invoices.filter(inv => {
         const pName = inv.warrantyName?.toLowerCase() || 'other';
         if (providerKey === 'first american') return pName.includes('first american');
@@ -787,30 +796,46 @@ function openProviderClaimsWorkspace(providerName, invoices) { // Changed parame
     let unclaimedCount = 0;
     let claimedCount = 0;
 
-    // Iterate over the filtered invoices
     filteredInvoices.forEach(inv => {
         const card = document.createElement('div');
         card.className = 'invoice-card';
         card.dataset.invoiceNumber = inv.invoiceNumber;
-        card.dataset.invoiceId = inv.id; // Use invoice ID
+        card.dataset.invoiceId = inv.id;
         const isClaimed = inv.status === 'paid' || inv.status === 'Claimed';
 
-        card.innerHTML = `<div class="flex justify-between items-start"><div><p class="font-semibold text-slate-800">${inv.customerName || 'N/A'}</p><p class="text-xs text-slate-500">#${inv.invoiceNumber || 'N/A'} &bull; ${inv.createdAt?.toDate().toLocaleDateString() || 'N/A'}</p></div><p class="font-bold text-lg text-green-600">${formatCurrency(inv.total)}</p></div><div class="mt-3 flex justify-end items-center gap-2"><button class="btn-secondary-stitch text-xs view-invoice-btn" data-id="${inv.id}">View Invoice</button>${!isClaimed ? `<button class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-1 px-3 rounded-md process-claim-btn">Process Claim</button>` : ''}</div>`;
+        let actionButtonHtml = '';
+        if (providerName.toLowerCase() === 'home guard') {
+            if (!isClaimed) {
+                actionButtonHtml = `<button class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-1 px-3 rounded-md process-claim-btn">Process Claim</button>`;
+            }
+        } else {
+            if (isClaimed) {
+                actionButtonHtml = `<button class="bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold py-1 px-3 rounded-md unclaim-btn">Unclaim</button>`;
+            } else {
+                actionButtonHtml = `<button class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold py-1 px-3 rounded-md process-claim-btn">Mark as Processed</button>`;
+            }
+        }
 
-        if(isClaimed) { 
-            card.classList.add('claimed'); 
-            claimedList.appendChild(card); 
-            claimedCount++; 
-        } else { 
-            unclaimedList.appendChild(card); 
-            unclaimedCount++; 
+        card.innerHTML = `<div class="flex justify-between items-start"><div><p class="font-semibold text-slate-800">${inv.customerName || 'N/A'}</p><p class="text-xs text-slate-500">#${inv.invoiceNumber || 'N/A'} &bull; ${inv.createdAt?.toDate().toLocaleDateString() || 'N/A'}</p></div><p class="font-bold text-lg text-green-600">${formatCurrency(inv.total)}</p></div><div class="mt-3 flex justify-end items-center gap-2"><button class="btn-secondary-stitch text-xs view-invoice-btn" data-id="${inv.id}">View Invoice</button>${actionButtonHtml}</div>`;
+
+        if (isClaimed) {
+            card.classList.add('claimed');
+            claimedList.appendChild(card);
+            claimedCount++;
+        } else {
+            unclaimedList.appendChild(card);
+            unclaimedCount++;
         }
     });
 
-    if (unclaimedCount === 0) { unclaimedList.innerHTML = '<p class="text-center text-sm text-slate-500 p-4">No unclaimed invoices.</p>'; processAllBtn.classList.add('hidden'); } 
-    else { processAllBtn.classList.remove('hidden'); }
+    if (unclaimedCount === 0) {
+        unclaimedList.innerHTML = '<p class="text-center text-sm text-slate-500 p-4">No unclaimed invoices.</p>';
+        if (providerName.toLowerCase() === 'home guard') processAllBtn.style.display = 'none';
+    } else {
+        if (providerName.toLowerCase() === 'home guard') processAllBtn.style.display = 'block';
+    }
     if (claimedCount === 0) claimedList.innerHTML = '<p class="text-center text-sm text-slate-500 p-4">No claimed invoices.</p>';
-    
+
     providerInvoiceListOverlay.classList.add('is-visible');
 }
 
@@ -1069,6 +1094,12 @@ function listenForWarranties() {
         warranties.sort((a, b) => (b.createdAt?.toDate() || 0) - (a.createdAt?.toDate() || 0));
         allWarrantiesData = warranties; // Store the sorted data
         updateDashboard(allWarrantiesData);
+
+        // If the claims workspace is open, re-render it with the new data
+        const providerInvoiceListOverlay = document.getElementById('providerInvoiceListOverlay');
+        if (providerInvoiceListOverlay && providerInvoiceListOverlay.classList.contains('is-visible') && currentProvider) {
+            openProviderClaimsWorkspace(currentProvider, allWarrantiesData);
+        }
     }, (error) => {
         console.error("Error listening for warranties:", error);
     });
@@ -3296,53 +3327,79 @@ if(saveInvoiceBtn) {
     if (claimsWorkspace) {
         claimsWorkspace.addEventListener('click', async (event) => {
             const processBtn = event.target.closest('.process-claim-btn');
+            const unclaimBtn = event.target.closest('.unclaim-btn');
+
             if (processBtn) {
                 const card = processBtn.closest('.invoice-card');
-                const invoiceId = card.dataset.invoiceId; // CORRECT: Use invoiceId from the dataset
-                const claimsEmail = document.getElementById('claimsEmailInput').value;
+                const invoiceId = card.dataset.invoiceId;
 
-                if (!claimsEmail || !claimsEmail.includes('@')) {
-                    alert('Please enter a valid email address for claims submission.');
-                    return;
-                }
-                
-                // CORRECT: Find the invoice directly in the flat allWarrantiesData (which holds all warranty invoices)
-                const invoice = allWarrantiesData.find(inv => inv.id === invoiceId);
-
-                if (!invoice || !invoice.url) {
-                    alert('Could not find the invoice details or its PDF URL. Please try again.');
-                    return;
-                }
-
-                if (confirm(`This will submit invoice #${invoice.invoiceNumber} for processing to ${claimsEmail}. Proceed?`)) {
+                if (currentProvider.toLowerCase() === 'home guard') {
+                    // Existing logic for Home Guard
+                    const claimsEmail = document.getElementById('claimsEmailInput').value;
+                    if (!claimsEmail || !claimsEmail.includes('@')) {
+                        alert('Please enter a valid email address for claims submission.');
+                        return;
+                    }
+                    const invoice = allWarrantiesData.find(inv => inv.id === invoiceId);
+                    if (!invoice || !invoice.url) {
+                        alert('Could not find the invoice details or its PDF URL. Please try again.');
+                        return;
+                    }
+                    if (confirm(`This will submit invoice #${invoice.invoiceNumber} for processing to ${claimsEmail}. Proceed?`)) {
+                        processBtn.textContent = 'Processing...';
+                        processBtn.disabled = true;
+                        try {
+                            const response = await fetch(SEND_HOMEGUARD_CLAIM_URL, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    warrantyId: invoice.id,
+                                    invoiceNumber: invoice.invoiceNumber,
+                                    claimsEmail: claimsEmail,
+                                    pdfUrl: invoice.url
+                                })
+                            });
+                            const result = await response.json();
+                            if (!response.ok) throw new Error(result.message || 'An unknown error occurred.');
+                            showMessage(`Invoice #${invoice.invoiceNumber} sent successfully!`, 'success');
+                        } catch (error) {
+                            console.error("Failed to send claim:", error);
+                            alert(`Failed to send claim: ${error.message}`);
+                            processBtn.textContent = 'Process Claim';
+                            processBtn.disabled = false;
+                        }
+                    }
+                } else {
+                    // New "Mark as Processed" logic for other providers
                     processBtn.textContent = 'Processing...';
                     processBtn.disabled = true;
-
                     try {
-                        const response = await fetch(SEND_HOMEGUARD_CLAIM_URL, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                warrantyId: invoice.id, // CORRECT: Pass the invoice's own ID as warrantyId
-                                invoiceNumber: invoice.invoiceNumber,
-                                claimsEmail: claimsEmail,
-                                pdfUrl: invoice.url
-                            })
-                        });
-
-                        const result = await response.json();
-                        if (!response.ok) {
-                            throw new Error(result.message || 'An unknown error occurred.');
-                        }
-                        
-                        showMessage(`Invoice #${invoice.invoiceNumber} sent successfully!`, 'success');
-                        // The backend now handles updating the status, so the frontend will update on the next Firestore snapshot.
+                        const invoiceRef = db.collection('invoices').doc(invoiceId);
+                        await invoiceRef.update({ status: 'Claimed' });
+                        showMessage('Invoice marked as processed.', 'success');
                     } catch (error) {
-                        console.error("Failed to send claim:", error);
-                        alert(`Failed to send claim: ${error.message}`);
-                        processBtn.textContent = 'Process Claim';
+                        console.error('Error marking invoice as processed:', error);
+                        showMessage('Failed to update invoice status.', 'error');
+                        processBtn.textContent = 'Mark as Processed';
                         processBtn.disabled = false;
                     }
+                }
+            }
+
+            if (unclaimBtn) {
+                const card = unclaimBtn.closest('.invoice-card');
+                const invoiceId = card.dataset.invoiceId;
+                unclaimBtn.textContent = 'Unclaiming...';
+                unclaimBtn.disabled = true;
+                try {
+                    const invoiceRef = db.collection('invoices').doc(invoiceId);
+                    await invoiceRef.update({ status: 'pending' }); // Set back to a generic unclaimed status
+                    showMessage('Invoice has been unclaimed.', 'success');
+                } catch (error) {
+                    console.error('Error unclaiming invoice:', error);
+                    showMessage('Failed to unclaim invoice.', 'error');
+                    unclaimBtn.textContent = 'Unclaim';
+                    unclaimBtn.disabled = false;
                 }
             }
         });
