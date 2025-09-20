@@ -3841,7 +3841,7 @@ if (sendAllInvoicesBtn) {
                 });
 
                 // Re-generate the PDF with the final invoice number and no watermark
-                invoice.base64Pdf = generatePDF(invoice, false);
+                invoice.base64Pdf = await generatePDF(invoice, false);
             }
 
             // Find the customer and warranty invoices from the processed pendingInvoices
