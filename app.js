@@ -1583,6 +1583,7 @@ async function openScheduleJobModal(job) {
     currentJobToReschedule = job; // Store the job globally for this modal
     document.getElementById('modalScheduleJobId').value = job.id;
     document.getElementById('modalScheduleCustomer').textContent = job.customer || 'N/A';
+    document.getElementById('modalSchedulePhone').textContent = job.phone || 'N/A';
     document.getElementById('modalScheduleAddress').textContent = job.address || 'N/A';
     document.getElementById('modalScheduleIssue').textContent = job.issue || 'N/A';
     document.getElementById('modalScheduleWarrantyProvider').textContent = job.warrantyProvider || 'N/A';
