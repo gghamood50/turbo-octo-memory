@@ -1157,9 +1157,9 @@ function animateCountUp(element, targetValue, duration = 500) {
 }
 
 function renderDashboardStats(jobs, tripSheets) {
-    const unscheduledJobsCount = jobs.filter(j => j.status === 'Needs Scheduling').length;
     const scheduledJobsCount = jobs.filter(j => j.status === 'Scheduled' || j.status === 'Awaiting completion').length;
     const totalJobsCount = jobs.length;
+    const unscheduledJobsCount = totalJobsCount - scheduledJobsCount;
     const totalTripSheetsCount = tripSheets.length;
 
     animateCountUp(dashboardUnscheduledJobsEl, unscheduledJobsCount);
