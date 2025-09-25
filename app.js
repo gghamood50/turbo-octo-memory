@@ -1582,13 +1582,29 @@ async function openScheduleJobModal(job) {
 
     currentJobToReschedule = job; // Store the job globally for this modal
     document.getElementById('modalScheduleJobId').value = job.id;
-    document.getElementById('modalScheduleCustomer').textContent = job.customer || 'N/A';
-    document.getElementById('modalSchedulePhone').textContent = job.phone || 'N/A';
-    document.getElementById('modalScheduleAddress').textContent = job.address || 'N/A';
-    document.getElementById('modalScheduleIssue').textContent = job.issue || 'N/A';
-    document.getElementById('modalScheduleWarrantyProvider').textContent = job.warrantyProvider || 'N/A';
-    document.getElementById('modalSchedulePlanType').textContent = job.planType || 'N/A';
-    document.getElementById('modalScheduleDispatchOrPoNumber').textContent = job.dispatchOrPoNumber || 'N/A';
+
+    const customerInput = document.getElementById('modalScheduleCustomerInput');
+    const phoneInput = document.getElementById('modalSchedulePhoneInput');
+    const addressInput = document.getElementById('modalScheduleAddressInput');
+    const issueInput = document.getElementById('modalScheduleIssueInput');
+    const warrantyInput = document.getElementById('modalScheduleWarrantyInput');
+    const planTypeInput = document.getElementById('modalSchedulePlanTypeInput');
+    const dispatchInput = document.getElementById('modalScheduleDispatchInput');
+
+    const detailInputs = [customerInput, phoneInput, addressInput, issueInput, warrantyInput, planTypeInput, dispatchInput];
+    detailInputs.forEach(input => {
+        if (!input) return;
+        input.classList.remove('bg-slate-100', 'cursor-not-allowed');
+        input.readOnly = false;
+    });
+
+    if (customerInput) customerInput.value = job.customer || '';
+    if (phoneInput) phoneInput.value = job.phone || '';
+    if (addressInput) addressInput.value = job.address || '';
+    if (issueInput) issueInput.value = job.issue || '';
+    if (warrantyInput) warrantyInput.value = job.warrantyProvider || '';
+    if (planTypeInput) planTypeInput.value = job.planType || '';
+    if (dispatchInput) dispatchInput.value = job.dispatchOrPoNumber || '';
 
     const summaryContainer = document.getElementById('modalScheduleSummaryContainer');
     const summaryEl = document.getElementById('modalScheduleSummary');
@@ -1650,6 +1666,11 @@ async function openScheduleJobModal(job) {
 
         // 2. Handle non-interactive states
         if (status === 'Completed') {
+            detailInputs.forEach(input => {
+                if (!input) return;
+                input.readOnly = true;
+                input.classList.add('bg-slate-100', 'cursor-not-allowed');
+            });
             confirmBtn.textContent = 'View Only';
             confirmBtn.disabled = true;
             if (job.assignedTechnicianId && job.assignedTechnicianName) { // Check for ID as well
@@ -2789,21 +2810,46 @@ if(saveInvoiceBtn) {
             }
 
             const jobRef = firebase.firestore().doc(`jobs/${jobId}`);
-            const originalJob = currentJobToReschedule; // Get the state of the job when the modal was opened
+            const originalJob = currentJobToReschedule || {};
             const isReschedule = originalJob.status === 'Scheduled' || originalJob.status === 'Awaiting completion';
 
+            const customerInput = document.getElementById('modalScheduleCustomerInput');
+            const phoneInput = document.getElementById('modalSchedulePhoneInput');
+            const addressInput = document.getElementById('modalScheduleAddressInput');
+            const issueInput = document.getElementById('modalScheduleIssueInput');
+            const warrantyInput = document.getElementById('modalScheduleWarrantyInput');
+            const planTypeInput = document.getElementById('modalSchedulePlanTypeInput');
+            const dispatchInput = document.getElementById('modalScheduleDispatchInput');
+
             const updatedData = {
-                status: 'Scheduled',
+                customer: customerInput ? customerInput.value.trim() : '',
+                phone: phoneInput ? phoneInput.value.trim() : '',
+                address: addressInput ? addressInput.value.trim() : '',
+                issue: issueInput ? issueInput.value.trim() : '',
+                warrantyProvider: warrantyInput ? warrantyInput.value.trim() : '',
+                planType: planTypeInput ? planTypeInput.value.trim() : '',
+                dispatchOrPoNumber: dispatchInput ? dispatchInput.value.trim() : '',
                 scheduledDate: dateValue,
                 timeSlot: timeSlotValue,
                 rescheduleReason: firebase.firestore.FieldValue.delete()
             };
 
-            if (isReschedule) {
+            const originalDate = originalJob.scheduledDate || '';
+            const originalSlot = originalJob.timeSlot || '';
+            const dateOrTimeChanged = originalDate !== dateValue || originalSlot !== timeSlotValue;
+
+            let newStatus = originalJob.status || '';
+            const shouldForceScheduled = !newStatus || newStatus === 'Needs Scheduling' || (typeof newStatus === 'string' && newStatus.startsWith('Rescheduled by'));
+            if (shouldForceScheduled || (isReschedule && dateOrTimeChanged)) {
+                newStatus = 'Scheduled';
+            }
+            updatedData.status = newStatus || 'Scheduled';
+
+            if (isReschedule && dateOrTimeChanged) {
                 // It's a reschedule, so unassign the technician as per the requirement.
                 updatedData.assignedTechnicianId = firebase.firestore.FieldValue.delete();
                 updatedData.assignedTechnicianName = firebase.firestore.FieldValue.delete();
-            } else {
+            } else if (!isReschedule) {
                 // It's a new schedule, so check for a technician assignment.
                 const technicianSelect = document.getElementById('modalJobTechnician');
                 const selectedTechId = technicianSelect.value;
