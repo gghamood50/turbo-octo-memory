@@ -3539,13 +3539,15 @@ if(saveInvoiceBtn) {
 
     // Trip Sheet Logic
     if(generateTripSheetsBtn) generateTripSheetsBtn.addEventListener('click', async () => {
-        const selectedDate = tripSheetDateInput.value;
-        if (!selectedDate) {
-            alert("Please select a date for the trip sheets.");
-            tripSheetDateInput.focus();
-            return;
-        }
+    const selectedDate = tripSheetDateInput.value;
+    if (!selectedDate) {
+        showMessage("Please select a date for the trip sheets.", "error");
+        tripSheetDateInput.focus();
+        return;
+    }
 
+    // This is the core function that does the generation. We'll call it directly or after confirmation.
+    const proceedWithGeneration = async () => {
         generateTripSheetsBtn.disabled = true;
         generateTripSheetsBtn.innerHTML = `<span class="material-icons-outlined text-lg animate-spin">sync</span> Generating...`;
         scheduleStatus.textContent = `Generating trip sheets for ${selectedDate}. This may take a moment.`;
@@ -3567,12 +3569,54 @@ if(saveInvoiceBtn) {
         } catch (error) {
             console.error('Error generating trip sheets:', error);
             scheduleStatus.textContent = `Error generating trip sheets for ${selectedDate}: ${error.message}`;
-            tripSheetsContainer.innerHTML = `<div class="text-center py-8 text-red-500"><span class="material-icons-outlined text-4xl">error</span><p>Failed to generate trip sheets for ${selectedDate}.</p><p class="text-sm">${error.message}</p></div>`;
+            tripSheetsContainer.innerHTML = `<div class="text-center py-8 text-red-500"><span class="material-icons-outlined text-4xl">error</span><p>Failed to generate trip sheets.</p><p class="text-sm">${error.message}</p></div>`;
         } finally {
             generateTripSheetsBtn.disabled = false;
             generateTripSheetsBtn.innerHTML = `<span class="material-icons-outlined text-lg">route</span>Generate Trip Sheets`;
         }
-    });
+    };
+
+    // --- NEW LOGIC: Check before generating ---
+    try {
+        const previewQuery = db.collection("previewTripSheets").where("date", "==", selectedDate);
+        const snapshot = await previewQuery.get();
+
+        if (snapshot.empty) {
+            // No preview exists, so generate immediately.
+            await proceedWithGeneration();
+        } else {
+            // A preview exists, so show our new confirmation modal.
+            const overwriteModal = document.getElementById('overwriteConfirmationModal');
+            overwriteModal.style.display = 'block';
+
+            const confirmBtn = overwriteModal.querySelector('.confirm-btn');
+            const cancelBtn = overwriteModal.querySelector('.cancel-btn');
+            const closeBtn = overwriteModal.querySelector('.close-button');
+
+            const closeModal = () => overwriteModal.style.display = 'none';
+
+            // Use .onclick to easily manage single-use listeners
+            confirmBtn.onclick = async () => {
+                closeModal();
+                // 1. Delete existing previews
+                const batch = db.batch();
+                snapshot.docs.forEach(doc => {
+                    batch.delete(doc.ref);
+                });
+                await batch.commit();
+                showMessage('Existing preview deleted. Generating a new one...', 'info');
+
+                // 2. Proceed with generation
+                await proceedWithGeneration();
+            };
+            cancelBtn.onclick = closeModal;
+            closeBtn.onclick = closeModal;
+        }
+    } catch (error) {
+        console.error("Error checking for existing trip sheets:", error);
+        showMessage("Could not check for existing previews. Please try again.", "error");
+    }
+});
 
     if(approveTripSheetsBtn) approveTripSheetsBtn.addEventListener('click', async () => {
         const date = tripSheetDateInput.value;
