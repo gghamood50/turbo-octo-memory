@@ -1548,47 +1548,76 @@ function closeEditTechModal() {
 async function openScheduleJobModal(job) {
     if (!job) return;
 
+    // --- Resets and Initial state ---
+    const viewModeContainer = document.getElementById('job-details-view-mode');
+    const editModeContainer = document.getElementById('job-details-edit-mode');
+    const footerViewContainer = document.getElementById('footer-buttons-view-mode');
+    const footerEditContainer = document.getElementById('footer-buttons-edit-mode');
     const schedulingControlsContainer = document.getElementById('schedulingControlsContainer');
     const associatedInvoicesSection = document.getElementById('associatedInvoicesSection');
     const associatedInvoicesList = document.getElementById('associatedInvoicesList');
+    const editJobBtn = document.getElementById('editJobBtn');
 
-    // Reset and hide the invoices section by default
-    associatedInvoicesSection.classList.add('hidden');
-    associatedInvoicesList.innerHTML = '';
-
-    if (job.status === 'Completed') {
-        if(schedulingControlsContainer) schedulingControlsContainer.classList.add('hidden');
-        
-        // --- NEW LOGIC FOR ASSOCIATED INVOICES ---
-        const relatedInvoices = allInvoicesData.filter(invoice => invoice.jobId === job.id);
-
-        if (relatedInvoices.length > 0) {
-            const buttonsHtml = relatedInvoices.map(invoice => {
-                return `<a href="#" class="btn-invoice-link view-invoice-btn" data-id="${invoice.id}" role="button">
-                            <span class="material-icons-outlined">receipt_long</span>
-                            <span>Invoice ${invoice.invoiceNumber || 'N/A'} [${invoice.invoiceType || 'N/A'}]</span>
-                        </a>`;
-            }).join('');
-            associatedInvoicesList.innerHTML = `<div class="invoice-button-container">${buttonsHtml}</div>`;
-        } else {
-            associatedInvoicesList.innerHTML = `<p class="text-slate-500">No associated invoices found.</p>`;
-        }
-        associatedInvoicesSection.classList.remove('hidden');
-
-    } else {
-        if(schedulingControlsContainer) schedulingControlsContainer.classList.remove('hidden');
-        associatedInvoicesSection.classList.add('hidden');
+    if (viewModeContainer && editModeContainer) {
+        viewModeContainer.classList.remove('hidden');
+        editModeContainer.classList.add('hidden');
     }
+    if (footerViewContainer && footerEditContainer) {
+        footerViewContainer.classList.remove('hidden');
+        footerEditContainer.classList.add('hidden');
+    }
+    if (schedulingControlsContainer) schedulingControlsContainer.classList.remove('hidden');
+    if (associatedInvoicesSection) associatedInvoicesSection.classList.add('hidden');
+    if (associatedInvoicesList) associatedInvoicesList.innerHTML = '';
+    if (editJobBtn) editJobBtn.classList.remove('hidden');
 
     currentJobToReschedule = job; // Store the job globally for this modal
-    document.getElementById('modalScheduleJobId').value = job.id;
-    document.getElementById('modalScheduleCustomer').textContent = job.customer || 'N/A';
-    document.getElementById('modalSchedulePhone').textContent = job.phone || 'N/A';
-    document.getElementById('modalScheduleAddress').textContent = job.address || 'N/A';
-    document.getElementById('modalScheduleIssue').textContent = job.issue || 'N/A';
-    document.getElementById('modalScheduleWarrantyProvider').textContent = job.warrantyProvider || 'N/A';
-    document.getElementById('modalSchedulePlanType').textContent = job.planType || 'N/A';
-    document.getElementById('modalScheduleDispatchOrPoNumber').textContent = job.dispatchOrPoNumber || 'N/A';
+    const jobIdInput = document.getElementById('modalScheduleJobId');
+    if (jobIdInput) jobIdInput.value = job.id;
+
+    const setTextContent = (elementId, value) => {
+        const el = document.getElementById(elementId);
+        if (el) el.textContent = value || 'N/A';
+    };
+
+    // --- Populate VIEW mode elements ---
+    setTextContent('modalScheduleCustomer', job.customer);
+    setTextContent('modalSchedulePhone', job.phone);
+    setTextContent('modalScheduleAddress', job.address);
+    setTextContent('modalScheduleIssue', job.issue);
+    setTextContent('modalScheduleWarrantyProvider', job.warrantyProvider);
+    setTextContent('modalSchedulePlanType', job.planType);
+    setTextContent('modalScheduleDispatchOrPoNumber', job.dispatchOrPoNumber);
+
+    // --- Populate EDIT mode elements ---
+    const setInputValue = (elementId, value) => {
+        const el = document.getElementById(elementId);
+        if (el) el.value = value || '';
+    };
+
+    setInputValue('editJobCustomer', job.customer);
+    setInputValue('editJobPhone', job.phone);
+    setInputValue('editJobAddress', job.address);
+    setInputValue('editJobIssue', job.issue);
+    setInputValue('editJobWarrantyProvider', job.warrantyProvider);
+    setInputValue('editJobPlanType', job.planType);
+    setInputValue('editJobDispatchOrPoNumber', job.dispatchOrPoNumber);
+
+    // --- Conditional UI based on Job Status ---
+    if (job.status === 'Completed') {
+        if (schedulingControlsContainer) schedulingControlsContainer.classList.add('hidden');
+        if (editJobBtn) editJobBtn.classList.add('hidden');
+
+        if (associatedInvoicesList) {
+            const relatedInvoices = allInvoicesData.filter(invoice => invoice.jobId === job.id);
+            if (relatedInvoices.length > 0) {
+                associatedInvoicesList.innerHTML = `<div class="invoice-button-container">${relatedInvoices.map(inv => `<a href="#" class="btn-invoice-link view-invoice-btn" data-id="${inv.id}" role="button"><span class="material-icons-outlined">receipt_long</span><span>Invoice ${inv.invoiceNumber || 'N/A'}${inv.invoiceType ? ` [${inv.invoiceType}]` : ''}</span></a>`).join('')}</div>`;
+            } else {
+                associatedInvoicesList.innerHTML = `<p class="text-slate-500">No associated invoices found.</p>`;
+            }
+        }
+        if (associatedInvoicesSection) associatedInvoicesSection.classList.remove('hidden');
+    }
 
     const summaryContainer = document.getElementById('modalScheduleSummaryContainer');
     const summaryEl = document.getElementById('modalScheduleSummary');
@@ -1603,19 +1632,24 @@ async function openScheduleJobModal(job) {
 
     const reasonContainer = document.getElementById('rescheduleReasonContainer');
     const reasonEl = document.getElementById('modalScheduleRescheduleReason');
-
-    if (job.rescheduleReason) {
-        reasonEl.textContent = job.rescheduleReason;
-        reasonContainer.classList.remove('hidden');
-    } else {
-        reasonContainer.classList.add('hidden');
+    if (reasonEl && reasonContainer) {
+        if (job.rescheduleReason) {
+            reasonEl.textContent = job.rescheduleReason;
+            reasonContainer.classList.remove('hidden');
+        } else {
+            reasonContainer.classList.add('hidden');
+        }
     }
 
     const dateInput = document.getElementById('modalJobDate');
-    dateInput.value = job.scheduledDate || new Date().toISOString().split('T')[0];
+    if (dateInput) {
+        dateInput.value = job.scheduledDate || new Date().toISOString().split('T')[0];
+    }
 
     const timeSlotSelect = document.getElementById('modalJobTimeSlot');
-    timeSlotSelect.value = job.timeSlot || "";
+    if (timeSlotSelect) {
+        timeSlotSelect.value = job.timeSlot || "";
+    }
 
     const technicianContainer = document.getElementById('modalTechnicianContainer');
     const technicianSelect = document.getElementById('modalJobTechnician');
@@ -1625,16 +1659,21 @@ async function openScheduleJobModal(job) {
     const confirmBtnWrapper = document.getElementById('confirmScheduleBtnWrapper');
     const scheduleWarningMessage = document.getElementById('scheduleWarningMessage');
 
-    // Populate technician dropdown once on modal open
-    technicianSelect.innerHTML = '<option value="">Select a technician...</option>';
-    allTechniciansData.forEach(tech => {
-        const option = document.createElement('option');
-        option.value = tech.id;
-        option.textContent = tech.name;
-        technicianSelect.appendChild(option);
-    });
+    if (technicianSelect) {
+        technicianSelect.innerHTML = '<option value="">Select a technician...</option>';
+        allTechniciansData.forEach(tech => {
+            const option = document.createElement('option');
+            option.value = tech.id;
+            option.textContent = tech.name;
+            technicianSelect.appendChild(option);
+        });
+    }
 
     const updateModalState = async () => {
+        if (!dateInput || !timeSlotSelect || !technicianSelect || !technicianContainer || !assignedToContainer || !assignedToEl || !confirmBtn || !scheduleWarningMessage) {
+            return;
+        }
+
         const selectedDate = dateInput.value;
         const selectedTimeSlot = timeSlotSelect.value;
         const status = job.status || 'Needs Scheduling';
@@ -1646,13 +1685,13 @@ async function openScheduleJobModal(job) {
         scheduleWarningMessage.classList.add('hidden');
         technicianContainer.classList.add('hidden');
         assignedToContainer.classList.add('hidden');
-        assignedToEl.textContent = ''; // Explicitly clear previous technician name
+        assignedToEl.textContent = '';
 
         // 2. Handle non-interactive states
         if (status === 'Completed') {
             confirmBtn.textContent = 'View Only';
             confirmBtn.disabled = true;
-            if (job.assignedTechnicianId && job.assignedTechnicianName) { // Check for ID as well
+            if (job.assignedTechnicianId && job.assignedTechnicianName) {
                 assignedToEl.textContent = job.assignedTechnicianName;
                 assignedToContainer.classList.remove('hidden');
             }
@@ -1661,12 +1700,12 @@ async function openScheduleJobModal(job) {
 
         // 3. Perform the main check for trip sheets
         try {
-            const tripSheetSnapshot = await db.collection("tripSheets").where("date", "==", selectedDate).get();
+            const tripSheetSnapshot = await db.collection('tripSheets').where('date', '==', selectedDate).get();
             const tripSheetsExistForDate = !tripSheetSnapshot.empty;
 
             // 4. Determine UI visibility and the technician to check against
             let technicianIdForCheck = job.assignedTechnicianId;
-            if (job.assignedTechnicianId && job.assignedTechnicianName) { // Check for name as well
+            if (job.assignedTechnicianId && job.assignedTechnicianName) {
                 assignedToEl.textContent = job.assignedTechnicianName;
                 assignedToContainer.classList.remove('hidden');
             } else if (tripSheetsExistForDate) {
@@ -1683,8 +1722,7 @@ async function openScheduleJobModal(job) {
                     const techTripSheet = techTripSheetDoc.data();
                     const jobInRoute = techTripSheet.route.find(routeJob => routeJob.id === job.id);
 
-                    // Defensively check if the button should be disabled.
-                    confirmBtn.disabled = false; // Default to enabled
+                    confirmBtn.disabled = false;
                     if (jobInRoute) {
                         const existingSlotInRoute = String(jobInRoute.timeSlot || '').trim();
                         const newlySelectedSlot = String(selectedTimeSlot || '').trim();
@@ -1692,7 +1730,7 @@ async function openScheduleJobModal(job) {
                         if (existingSlotInRoute === newlySelectedSlot) {
                             confirmBtn.disabled = true;
                             if (confirmBtnWrapper) {
-                                confirmBtnWrapper.setAttribute('title', "Job is already in this trip sheet for this time slot.");
+                                confirmBtnWrapper.setAttribute('title', 'Job is already in this trip sheet for this time slot.');
                             }
                         }
                     }
@@ -1703,18 +1741,16 @@ async function openScheduleJobModal(job) {
                 confirmBtn.textContent = 'Confirm Schedule';
             }
         } catch (error) {
-            console.error("Error updating schedule button state:", error);
+            console.error('Error updating schedule button state:', error);
             confirmBtn.textContent = 'Error';
             confirmBtn.disabled = true;
         }
     };
 
-    // Add event listeners
-    dateInput.addEventListener('change', updateModalState);
-    timeSlotSelect.addEventListener('change', updateModalState);
-    technicianSelect.addEventListener('change', updateModalState);
+    if (dateInput) dateInput.addEventListener('change', updateModalState);
+    if (timeSlotSelect) timeSlotSelect.addEventListener('change', updateModalState);
+    if (technicianSelect) technicianSelect.addEventListener('change', updateModalState);
 
-    // Link handling logic (remains the same)
     const linkContainer = document.getElementById('scheduleModalLinkContainer');
     const linkInput = document.getElementById('scheduleModalLinkInput');
     const copyBtn = document.getElementById('scheduleModalCopyBtn');
@@ -1734,6 +1770,7 @@ async function openScheduleJobModal(job) {
             setTimeout(() => { copyBtn.innerHTML = originalIcon; }, 2000);
         };
     }
+
     const sendManualLinkBtn = document.getElementById('sendManualLinkBtn');
     if (sendManualLinkBtn) {
         const status = job.status || 'Needs Scheduling';
@@ -1743,7 +1780,7 @@ async function openScheduleJobModal(job) {
             sendManualLinkBtn.style.visibility = 'hidden';
         }
     }
-    
+
     await updateModalState();
     scheduleJobModal.style.display = 'block';
 }
@@ -3045,6 +3082,120 @@ if(saveInvoiceBtn) {
                 button.innerHTML = originalHtml;
             }
         }
+
+        // --- In-Modal Job Edit Button Handlers ---
+        const editJobBtnEl = event.target.closest('#editJobBtn');
+        if (editJobBtnEl) {
+            const viewContainer = document.getElementById('job-details-view-mode');
+            const editContainer = document.getElementById('job-details-edit-mode');
+            const footerView = document.getElementById('footer-buttons-view-mode');
+            const footerEdit = document.getElementById('footer-buttons-edit-mode');
+            const schedulingControlsContainer = document.getElementById('schedulingControlsContainer');
+
+            if (viewContainer) viewContainer.classList.add('hidden');
+            if (editContainer) editContainer.classList.remove('hidden');
+            if (footerView) footerView.classList.add('hidden');
+            if (footerEdit) footerEdit.classList.remove('hidden');
+            if (schedulingControlsContainer) schedulingControlsContainer.classList.add('hidden');
+        }
+
+        const cancelEditJobBtnEl = event.target.closest('#cancelEditJobBtn');
+        if (cancelEditJobBtnEl) {
+            const viewContainer = document.getElementById('job-details-view-mode');
+            const editContainer = document.getElementById('job-details-edit-mode');
+            const footerView = document.getElementById('footer-buttons-view-mode');
+            const footerEdit = document.getElementById('footer-buttons-edit-mode');
+            const schedulingControlsContainer = document.getElementById('schedulingControlsContainer');
+
+            if (viewContainer) viewContainer.classList.remove('hidden');
+            if (editContainer) editContainer.classList.add('hidden');
+            if (footerView) footerView.classList.remove('hidden');
+            if (footerEdit) footerEdit.classList.add('hidden');
+            if (schedulingControlsContainer) schedulingControlsContainer.classList.remove('hidden');
+
+            if (currentJobToReschedule) {
+                const resetValue = (id, value) => {
+                    const el = document.getElementById(id);
+                    if (el) el.value = value || '';
+                };
+                resetValue('editJobCustomer', currentJobToReschedule.customer);
+                resetValue('editJobPhone', currentJobToReschedule.phone);
+                resetValue('editJobAddress', currentJobToReschedule.address);
+                resetValue('editJobIssue', currentJobToReschedule.issue);
+                resetValue('editJobWarrantyProvider', currentJobToReschedule.warrantyProvider);
+                resetValue('editJobPlanType', currentJobToReschedule.planType);
+                resetValue('editJobDispatchOrPoNumber', currentJobToReschedule.dispatchOrPoNumber);
+            }
+        }
+
+        const saveJobChangesBtnEl = event.target.closest('#saveJobChangesBtn');
+        if (saveJobChangesBtnEl) {
+            const jobId = document.getElementById('modalScheduleJobId')?.value;
+            if (!jobId) {
+                showMessage('Error: Job ID is missing.', 'error');
+                return;
+            }
+
+            const updatedData = {
+                customer: document.getElementById('editJobCustomer')?.value || '',
+                phone: document.getElementById('editJobPhone')?.value || '',
+                address: document.getElementById('editJobAddress')?.value || '',
+                issue: document.getElementById('editJobIssue')?.value || '',
+                warrantyProvider: document.getElementById('editJobWarrantyProvider')?.value || '',
+                planType: document.getElementById('editJobPlanType')?.value || '',
+                dispatchOrPoNumber: document.getElementById('editJobDispatchOrPoNumber')?.value || '',
+            };
+
+            saveJobChangesBtnEl.disabled = true;
+            saveJobChangesBtnEl.innerHTML = `<span class="material-icons-outlined text-lg animate-spin">sync</span> Saving...`;
+
+            try {
+                const jobRef = db.collection('jobs').doc(jobId);
+                await jobRef.update(updatedData);
+
+                const setViewText = (id, value) => {
+                    const el = document.getElementById(id);
+                    if (el) el.textContent = value || 'N/A';
+                };
+
+                setViewText('modalScheduleCustomer', updatedData.customer);
+                setViewText('modalSchedulePhone', updatedData.phone);
+                setViewText('modalScheduleAddress', updatedData.address);
+                setViewText('modalScheduleIssue', updatedData.issue);
+                setViewText('modalScheduleWarrantyProvider', updatedData.warrantyProvider);
+                setViewText('modalSchedulePlanType', updatedData.planType);
+                setViewText('modalScheduleDispatchOrPoNumber', updatedData.dispatchOrPoNumber);
+
+                currentJobToReschedule = { ...(currentJobToReschedule || {}), ...updatedData };
+                const jobIndex = allJobsData.findIndex(job => job.id === jobId);
+                if (jobIndex !== -1) {
+                    allJobsData[jobIndex] = { ...allJobsData[jobIndex], ...updatedData };
+                }
+
+                const viewContainer = document.getElementById('job-details-view-mode');
+                const editContainer = document.getElementById('job-details-edit-mode');
+                const footerView = document.getElementById('footer-buttons-view-mode');
+                const footerEdit = document.getElementById('footer-buttons-edit-mode');
+                const schedulingControlsContainer = document.getElementById('schedulingControlsContainer');
+
+                if (viewContainer) viewContainer.classList.remove('hidden');
+                if (editContainer) editContainer.classList.add('hidden');
+                if (footerView) footerView.classList.remove('hidden');
+                if (footerEdit) footerEdit.classList.add('hidden');
+                if (schedulingControlsContainer && currentJobToReschedule?.status !== 'Completed') {
+                    schedulingControlsContainer.classList.remove('hidden');
+                }
+
+                showMessage('Job details updated successfully!', 'success');
+            } catch (error) {
+                console.error('Error updating job details:', error);
+                showMessage(`Failed to save changes: ${error.message}`, 'error');
+            } finally {
+                saveJobChangesBtnEl.disabled = false;
+                saveJobChangesBtnEl.textContent = 'Save Changes';
+            }
+        }
+
         if (event.target.classList.contains('edit-part-btn')) {
             const partId = event.target.dataset.id;
             const partData = inventoryItemsData.find(p => p.id === partId);

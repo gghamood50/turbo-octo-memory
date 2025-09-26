@@ -1189,6 +1189,7 @@
         </div>
     </div>
 
+    <!-- START: REPLACE THE ENTIRE 'scheduleJobModal' DIV WITH THIS -->
     <div id="scheduleJobModal" class="modal">
         <div class="modal-content bg-slate-50 shadow-2xl border-2 border-slate-200 !p-0">
             <div class="modal-header bg-white px-6 py-4 rounded-t-lg border-b">
@@ -1199,46 +1200,54 @@
                 <input type="hidden" id="modalScheduleJobId">
                 
                 <!-- Job Details Section -->
-                <div class="space-y-3 p-4 bg-white border border-slate-200 rounded-lg">
+                <div class="p-4 bg-white border border-slate-200 rounded-lg">
                     <h3 class="text-lg font-semibold text-slate-700 border-b pb-2 mb-3">Job Details</h3>
-                    <div id="rescheduleReasonContainer" class="hidden text-sm p-3 mb-3 bg-amber-50 border border-amber-200 rounded-lg">
-                        <p><strong>Reschedule Reason:</strong></p>
-                        <p id="modalScheduleRescheduleReason" class="mt-1 font-bold"></p>
-                    </div>
-                    <div id="modalScheduleAssignedToContainer" class="hidden text-sm p-3 mb-3 bg-blue-50 border border-blue-200 rounded-lg">
-                        <p class="text-blue-800"><strong>Assigned to:</strong> <span id="modalScheduleAssignedTo" class="font-bold"></span></p>
-                    </div>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2 text-sm">
-                        <div>
-                            <p class="mb-1"><strong>Customer:</strong> <span id="modalScheduleCustomer"></span></p>
-                            <p><strong>Phone:</strong> <span id="modalSchedulePhone"></span></p>
+                    
+                    <!-- VIEW MODE CONTAINER (Initially Visible) -->
+                    <div id="job-details-view-mode">
+                        <div id="rescheduleReasonContainer" class="hidden text-sm p-3 mb-3 bg-amber-50 border border-amber-200 rounded-lg">
+                            <p><strong>Reschedule Reason:</strong></p>
+                            <p id="modalScheduleRescheduleReason" class="mt-1 font-bold"></p>
                         </div>
-                        <p><strong>Address:</strong> <span id="modalScheduleAddress"></span></p>
-                        <p class="md:col-span-2"><strong>Issue:</strong> <span id="modalScheduleIssue"></span></p>
-                        <p><strong>Warranty:</strong> <span id="modalScheduleWarrantyProvider"></span></p>
-                        <p><strong>Plan:</strong> <span id="modalSchedulePlanType"></span></p>
-                        <p class="md:col-span-2"><strong>PO Number:</strong> <span id="modalScheduleDispatchOrPoNumber"></span></p>
+                        <div id="modalScheduleAssignedToContainer" class="hidden text-sm p-3 mb-3 bg-blue-50 border border-blue-200 rounded-lg">
+                            <p class="text-blue-800"><strong>Assigned to:</strong> <span id="modalScheduleAssignedTo" class="font-bold"></span></p>
+                        </div>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2 text-sm">
+                            <div><p class="mb-1"><strong>Customer:</strong> <span id="modalScheduleCustomer"></span></p><p><strong>Phone:</strong> <span id="modalSchedulePhone"></span></p></div>
+                            <p><strong>Address:</strong> <span id="modalScheduleAddress"></span></p>
+                            <p class="md:col-span-2"><strong>Issue:</strong> <span id="modalScheduleIssue"></span></p>
+                            <p><strong>Warranty:</strong> <span id="modalScheduleWarrantyProvider"></span></p>
+                            <p><strong>Plan:</strong> <span id="modalSchedulePlanType"></span></p>
+                            <p class="md:col-span-2"><strong>PO Number:</strong> <span id="modalScheduleDispatchOrPoNumber"></span></p>
+                        </div>
+                    </div>
+
+                    <!-- EDIT MODE CONTAINER (Initially Hidden) -->
+                    <div id="job-details-edit-mode" class="hidden">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div><label class="form-label">Customer Name</label><input type="text" id="editJobCustomer" class="form-input"></div>
+                            <div><label class="form-label">Phone</label><input type="text" id="editJobPhone" class="form-input"></div>
+                            <div class="md:col-span-2"><label class="form-label">Address</label><input type="text" id="editJobAddress" class="form-input"></div>
+                            <div class="md:col-span-2"><label class="form-label">Issue</label><textarea id="editJobIssue" class="form-input" rows="2"></textarea></div>
+                            <div><label class="form-label">Warranty Provider</label><input type="text" id="editJobWarrantyProvider" class="form-input"></div>
+                            <div><label class="form-label">Plan Type</label><input type="text" id="editJobPlanType" class="form-input"></div>
+                            <div class="md:col-span-2"><label class="form-label">Dispatch/PO #</label><input type="text" id="editJobDispatchOrPoNumber" class="form-input"></div>
+                        </div>
                     </div>
                 </div>
 
-                <!-- Call Summary Section -->
+                <!-- Other sections like Call Summary, Invoices, Link remain the same -->
                 <div id="modalScheduleSummaryContainer" class="hidden text-sm p-3 bg-green-50 border border-green-200 rounded-lg">
                     <p><strong>Call summary:</strong></p>
                     <p id="modalScheduleSummary" class="mt-1 whitespace-pre-wrap"></p>
                 </div>
-
-                <!-- Associated Invoices Section -->
                 <div id="associatedInvoicesSection" class="hidden space-y-3 p-4 bg-white border border-slate-200 rounded-lg">
                     <h3 class="text-lg font-semibold text-slate-700 border-b pb-2 mb-3">Associated Invoices</h3>
-                    <div id="associatedInvoicesList" class="space-y-2 text-sm">
-                        <!-- Invoice links will be dynamically inserted here -->
-                    </div>
+                    <div id="associatedInvoicesList" class="space-y-2 text-sm"></div>
                 </div>
-
-                <!-- Customer Scheduling Link Section -->
                 <div id="scheduleModalLinkContainer" class="space-y-3 p-4 bg-white border border-slate-200 rounded-lg hidden">
                     <h3 class="text-lg font-semibold text-slate-700 border-b pb-2 mb-3">Customer Scheduling Link</h3>
-                    <p class="text-sm text-slate-600">Share this link with the customer to allow them to schedule their own appointment.</p>
+                    <p class="text-sm text-slate-600">Share this link...</p>
                     <div class="flex gap-2">
                         <input type="text" id="scheduleModalLinkInput" readonly class="form-input bg-slate-100 w-full">
                         <button type="button" id="scheduleModalCopyBtn" class="btn-secondary-stitch">
@@ -1247,7 +1256,7 @@
                     </div>
                 </div>
 
-                <!-- Scheduling Section -->
+                <!-- Scheduling Controls Section -->
                 <div id="schedulingControlsContainer" class="grid grid-cols-1 md:grid-cols-2 gap-5 pt-4">
                     <div>
                         <label for="modalJobDate" class="form-label">Select Date</label>
@@ -1263,13 +1272,10 @@
                         </select>
                     </div>
                 </div>
-
-                <!-- Technician Selection Dropdown -->
                 <div id="modalTechnicianContainer" class="hidden">
                     <label for="modalJobTechnician" class="form-label">Assign Technician</label>
                     <select id="modalJobTechnician" class="form-input" required>
                         <option value="">Select a technician...</option>
-                        <!-- Options will be populated by JavaScript -->
                     </select>
                 </div>
 
@@ -1283,11 +1289,15 @@
                         <span id="manualLinkStatus" class="text-sm font-medium text-green-600"></span>
                     </div>
                     <div class="flex flex-col items-end">
-                        <div class="flex space-x-4">
-                           <button type="button" id="cancelScheduleJob" class="btn-secondary-stitch bg-white text-slate-700 border-slate-300 hover:bg-slate-100 px-5 py-2">Cancel</button>
-                           <span id="confirmScheduleBtnWrapper" class="tooltip-wrapper">
+                        <div id="footer-buttons-view-mode" class="flex space-x-4">
+                            <button type="button" id="editJobBtn" class="btn-secondary-stitch bg-white text-slate-700 border-slate-300 hover:bg-slate-100 px-5 py-2">Edit Details</button>
+                            <span id="confirmScheduleBtnWrapper" class="tooltip-wrapper">
                                 <button type="submit" id="confirmScheduleBtn" class="btn-primary-stitch px-5 py-2 disabled:bg-slate-400 disabled:cursor-not-allowed">Confirm Schedule</button>
-                           </span>
+                            </span>
+                        </div>
+                        <div id="footer-buttons-edit-mode" class="hidden flex space-x-4">
+                            <button type="button" id="cancelEditJobBtn" class="btn-secondary-stitch bg-white text-slate-700 border-slate-300 hover:bg-slate-100 px-5 py-2">Cancel</button>
+                            <button type="button" id="saveJobChangesBtn" class="btn-primary-stitch px-5 py-2">Save Changes</button>
                         </div>
                         <p id="scheduleWarningMessage" class="text-red-500 text-xs text-right mt-2 h-4"></p>
                     </div>
@@ -1295,6 +1305,7 @@
             </form>
         </div>
     </div>
+<!-- END: REPLACEMENT DIV -->
     
     <!-- "Fit into Trip Sheet" Modal -->
     <div id="fitInSheetModal" class="modal" style="display: none;">
