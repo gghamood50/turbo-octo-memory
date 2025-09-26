@@ -4127,6 +4127,9 @@ async function sendAllToOffice(jobId, customerInvoice, warrantyInvoice) {
 
 
     // Login Form
+    
+    
+
     if (tabVisibilityContainer) {
         tabVisibilityContainer.addEventListener('change', (e) => {
             if (e.target.classList.contains('toggle-checkbox')) {
