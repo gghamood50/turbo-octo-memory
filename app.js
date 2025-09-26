@@ -13,7 +13,6 @@ const GENERATE_TRIP_SHEETS_URL = 'https://generate-trip-sheets-216681158749.us-c
 const ASK_DANIEL_URL = 'https://ask-daniel-216681158749.us-central1.run.app';
 const SEND_SCHEDULING_LINKS_URL = 'https://send-manual-scheduling-links-216681158749.us-central1.run.app';
 const SEND_HOMEGUARD_CLAIM_URL = 'https://send-homeguard-claim-216681158749.us-central1.run.app';
-const UPLOAD_INVOICE_IMAGE_URL = 'https://upload-invoice-image-216681158749.us-central1.run.app/upload';
 const GET_JOBS_FOR_MAP_URL = 'https://get-jobs-for-map-216681158749.us-central1.run.app/getJobsForMap';
 
 // --- Global State ---
@@ -49,7 +48,6 @@ let currentFilteredData = [];
 let currentJobToReschedule = null;
 let scheduleModalAbortController = null;
 let currentWorkerTechnicianId = null;
-let invoiceImageFiles = [];
 
 // --- DOM Elements ---
 const tabVisibilityContainer = document.getElementById('tab-visibility-container');
@@ -169,8 +167,6 @@ const modalMarkPaidBtn = document.getElementById('modalMarkPaidBtn');
 const modalDownloadPdfBtn = document.getElementById('modalDownloadPdfBtn');
 const modalWorkerCloseBtn = document.getElementById('modalWorkerCloseBtn');
 const modalRemoveWorkerBtn = document.getElementById('modalRemoveWorkerBtn');
-const imageUploadInput = document.getElementById('imageUpload');
-const imagePreviewContainer = document.getElementById('imagePreviewContainer');
 
 
 // --- Render Functions ---
@@ -2654,28 +2650,15 @@ if(saveInvoiceBtn) {
              return;
         }
 
-        let imageUrls = [];
-        try {
-            const uploadButton = this;
-            uploadButton.disabled = true;
-            uploadButton.textContent = 'Uploading Images...';
-            
-            imageUrls = await uploadInvoiceImages(currentJobIdForInvoicing);
-            
-            uploadButton.textContent = 'Saving Invoice...';
-        } catch (error) {
-            this.disabled = false;
-            this.textContent = 'Save Invoice';
-            // The upload function already shows an error message.
-            return;
-        }
+        this.disabled = true;
+        this.textContent = 'Saving Invoice...';
 
         // --- NEW LOGIC ---
         // 1. Clear any old invoices from the queue.
         pendingInvoices = [];
 
         // 2. Create the invoice objects.
-        collectInvoiceData(imageUrls); 
+        collectInvoiceData(); 
         
         // 3. Generate a Base64 PDF for each invoice in the queue.
         for (const invoice of pendingInvoices) {
@@ -2694,6 +2677,9 @@ if(saveInvoiceBtn) {
         // 4. Show a success message and switch to the review screen.
         showMessage('Invoice(s) generated and ready for review.', 'success');
         showAfterSendInvoiceScreen();
+        
+        this.disabled = false;
+        this.textContent = 'Save Invoice';
     });
 }
     
@@ -2704,8 +2690,6 @@ if(saveInvoiceBtn) {
             "Are you sure you want to clear the form? Unsaved data will be lost.",
             () => {
                 if(invoiceFormEl) invoiceFormEl.reset();
-            if (imagePreviewContainer) imagePreviewContainer.innerHTML = '';
-            invoiceImageFiles = [];
                 setFormEditable(true); 
                 if(customTaxArea) customTaxArea.classList.add('hidden');
                 if(chequeNumberArea) chequeNumberArea.classList.add('hidden');
@@ -4143,10 +4127,6 @@ async function sendAllToOffice(jobId, customerInvoice, warrantyInvoice) {
 
 
     // Login Form
-    if(imageUploadInput) {
-        imageUploadInput.addEventListener('change', handleImageSelection);
-    }
-
     if (tabVisibilityContainer) {
         tabVisibilityContainer.addEventListener('change', (e) => {
             if (e.target.classList.contains('toggle-checkbox')) {
@@ -4849,51 +4829,6 @@ function showMessage(message, type = 'info') {
     }, 5000);
 }
 
-function handleImageSelection(event) {
-    if (!imagePreviewContainer) return;
-
-    // Clear previous previews and file list
-    imagePreviewContainer.innerHTML = '';
-    invoiceImageFiles = [];
-
-    const files = event.target.files;
-
-    for (const file of files) {
-        // Add file to our global array
-        invoiceImageFiles.push(file);
-
-        // Create the preview element
-        const previewWrapper = document.createElement('div');
-        previewWrapper.className = 'relative'; // For positioning the remove button
-
-        const img = document.createElement('img');
-        img.src = URL.createObjectURL(file);
-        img.className = 'w-full h-full object-cover rounded-lg';
-        img.onload = () => {
-            URL.revokeObjectURL(img.src); // Free up memory
-        }
-
-        const removeBtn = document.createElement('button');
-        removeBtn.innerHTML = '&times;';
-        removeBtn.className = 'absolute top-1 right-1 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center font-bold text-lg';
-        removeBtn.type = 'button'; // Prevent form submission
-
-        removeBtn.addEventListener('click', () => {
-            // Find the index of the file to remove
-            const indexToRemove = invoiceImageFiles.indexOf(file);
-            if (indexToRemove > -1) {
-                invoiceImageFiles.splice(indexToRemove, 1);
-            }
-            // Remove the preview from the DOM
-            previewWrapper.remove();
-        });
-
-        previewWrapper.appendChild(img);
-        previewWrapper.appendChild(removeBtn);
-        imagePreviewContainer.appendChild(previewWrapper);
-    }
-}
-
 function showConfirmationModal(title, message, onConfirm) {
     const modal = document.getElementById('confirmationModal');
     if (!modal) {
@@ -5247,51 +5182,6 @@ async function generatePDF(invoiceDataForPdf, isPreview = false) {
         doc.setTextColor(BRAND_COLOR);
         doc.text("Total Due:", totalsXLabel, totalsY, { align: 'right' });
         doc.text(formatCurrency(invoiceDataForPdf.total), rightColumnX, totalsY, { align: 'right' });
-
-        // --- ATTACHED IMAGES ---
-        if (invoiceDataForPdf.imageUrls && invoiceDataForPdf.imageUrls.length > 0) {
-            leftColumnY += 5; // Add some space before the images section
-            doc.setFont('helvetica', 'bold');
-            doc.setTextColor(HEADING_COLOR);
-            doc.text('Attached Images', margin, leftColumnY);
-            leftColumnY += 8;
-
-            const imageWidth = (pageWidth - margin * 3) / 2; // Two columns with a margin in between
-            let xPos = margin;
-            let maxImageHeightInRow = 0;
-
-            for (let i = 0; i < invoiceDataForPdf.imageUrls.length; i++) {
-                const imageUrl = invoiceDataForPdf.imageUrls[i];
-                const base64Image = await getImageAsBase64(imageUrl);
-
-                if (base64Image) {
-                    const imgProps = doc.getImageProperties(base64Image);
-                    const aspectRatio = imgProps.height / imgProps.width;
-                    const imageHeight = imageWidth * aspectRatio;
-
-                    if (leftColumnY + imageHeight > pageHeight - 25) { // Check for page break (leave footer room)
-                        doc.addPage();
-                        leftColumnY = margin;
-                        xPos = margin;
-                    }
-
-                    doc.addImage(base64Image, 'JPEG', xPos, leftColumnY, imageWidth, imageHeight);
-                    maxImageHeightInRow = Math.max(maxImageHeightInRow, imageHeight);
-                    
-                    if ((i + 1) % 2 === 0) {
-                        xPos = margin;
-                        leftColumnY += maxImageHeightInRow + 5;
-                        maxImageHeightInRow = 0;
-                    } else {
-                        xPos += imageWidth + margin;
-                    }
-                }
-            }
-            
-            if (invoiceDataForPdf.imageUrls.length % 2 !== 0) {
-                leftColumnY += maxImageHeightInRow + 5;
-            }
-        }
 
         // --- FOOTER, TERMS & SIGNATURE ---
         let finalY = Math.max(leftColumnY, totalsY, pageHeight - 60); 
@@ -5701,70 +5591,7 @@ function updateLineItemTotal(id) {
     if(itemTotalEl) itemTotalEl.textContent = formatCurrency(quantity * price);
 }
 
-async function uploadInvoiceImages(jobId) {
-    if (invoiceImageFiles.length === 0) {
-        return [];
-    }
-    if (!jobId) {
-        console.error("Cannot upload images, Job ID is missing.");
-        showMessage("Cannot upload images, Job ID is missing.", "error");
-        throw new Error("Job ID is missing");
-    }
-
-    // Helper to read a file as a Base64 Data URL
-    const readFileAsDataURL = (file) => {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result);
-            reader.onerror = (error) => reject(error);
-            reader.readAsDataURL(file);
-        });
-    };
-
-    const uploadPromises = invoiceImageFiles.map(async (file) => {
-        try {
-            const imageDataUrl = await readFileAsDataURL(file);
-            
-            const response = await fetch(UPLOAD_INVOICE_IMAGE_URL, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    jobId: jobId,
-                    filename: file.name,
-                    imageDataUrl: imageDataUrl,
-                }),
-            });
-
-            if (!response.ok) {
-                const errorResult = await response.json();
-                throw new Error(errorResult.details || `Server error: ${response.status}`);
-            }
-
-            const result = await response.json();
-            return result.url;
-
-        } catch (error) {
-            console.error(`Failed to upload ${file.name}:`, error);
-            // We throw the error so that Promise.all will reject.
-            throw error; 
-        }
-    });
-
-    try {
-        const imageUrls = await Promise.all(uploadPromises);
-        console.log("All images uploaded successfully via backend:", imageUrls);
-        return imageUrls;
-    } catch (error) {
-        console.error("One or more image uploads failed:", error);
-        showMessage("Error uploading images. Please try again.", "error");
-        // Re-throw the error to be caught by the save button's handler
-        throw error;
-    }
-}
-
-function collectInvoiceData(imageUrls = []) {
+function collectInvoiceData() {
     // --- 1. GATHER ALL RAW DATA FROM THE FORM ---
     const invoiceFormEl = document.getElementById('invoiceForm');
     const formData = new FormData(invoiceFormEl);
@@ -5793,7 +5620,6 @@ function collectInvoiceData(imageUrls = []) {
         selectedCountyTax: selectedCountyValue,
         planType: document.getElementById('planType').value,
         warrantyName: document.getElementById('warrantyName').value,
-        imageUrls: imageUrls,
     };
      if (auth.currentUser && auth.currentUser.uid) {
         baseData.createdByWorkerId = auth.currentUser.uid;
