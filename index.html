@@ -276,6 +276,11 @@
                                 </div>
                             </div>
                             <p id="scheduleStatus" class="text-sm text-slate-500 text-center">Select a date to view or generate trip sheets.</p>
+            
+            <div id="leftover-jobs-section" class="my-4">
+                <!-- This will be populated by app.js -->
+            </div>
+
                             <div id="trip-sheets-container" class="space-y-4">
                                 <!-- Trip sheets will be rendered here -->
                             </div>
@@ -950,6 +955,23 @@
             <div class="modal-footer">
                 <button class="btn-secondary-stitch cancel-btn">Cancel</button>
                 <button class="btn-primary-stitch confirm-btn">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="leftoverJobsWarningModal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">Approve with Unassigned Jobs?</h2>
+                <span class="close-button">&times;</span>
+            </div>
+            <div class="modal-body">
+                <p>There are still unassigned jobs. Are you sure you want to approve the current trip sheets?</p>
+                <p class="mt-2 font-semibold">Any leftover jobs will be moved back to "Needs Scheduling".</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary-stitch cancel-btn">Cancel</button>
+                <button class="btn-approve-stitch confirm-btn">Yes, Approve</button>
             </div>
         </div>
     </div>
