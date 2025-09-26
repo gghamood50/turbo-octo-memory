@@ -1191,15 +1191,29 @@
 
     <div id="scheduleJobModal" class="modal">
         <div class="modal-content bg-slate-50 shadow-2xl border-2 border-slate-200 !p-0">
-            <div class="modal-header bg-white px-6 py-4 rounded-t-lg border-b">
+            <div class="modal-header bg-white px-6 py-4 rounded-t-lg border-b flex justify-between items-center">
                 <h2 class="text-xl font-bold text-slate-800">View/Schedule Job</h2>
-                <span class="close-button" id="closeScheduleJobModal">&times;</span>
+                <div class="flex items-center gap-2">
+                    <button type="button" id="editJobDetailsBtn" class="btn-secondary-stitch">
+                        <span class="material-icons-outlined text-lg">edit</span>
+                        Edit
+                    </button>
+                    <button type="button" id="saveJobDetailsBtn" class="btn-primary-stitch hidden">
+                        <span class="material-icons-outlined text-lg">save</span>
+                        Save Changes
+                    </button>
+                    <button type="button" id="cancelEditJobDetailsBtn" class="btn-secondary-stitch hidden">
+                        <span class="material-icons-outlined text-lg">cancel</span>
+                        Cancel
+                    </button>
+                    <span class="close-button" id="closeScheduleJobModal">&times;</span>
+                </div>
             </div>
             <form id="scheduleJobForm" class="p-6 space-y-5">
                 <input type="hidden" id="modalScheduleJobId">
                 
                 <!-- Job Details Section -->
-                <div class="space-y-3 p-4 bg-white border border-slate-200 rounded-lg">
+                <div class="space-y-3 p-4 bg-white border border-slate-200 rounded-lg" id="jobDetailsSection">
                     <h3 class="text-lg font-semibold text-slate-700 border-b pb-2 mb-3">Job Details</h3>
                     <div id="rescheduleReasonContainer" class="hidden text-sm p-3 mb-3 bg-amber-50 border border-amber-200 rounded-lg">
                         <p><strong>Reschedule Reason:</strong></p>
@@ -1208,16 +1222,49 @@
                     <div id="modalScheduleAssignedToContainer" class="hidden text-sm p-3 mb-3 bg-blue-50 border border-blue-200 rounded-lg">
                         <p class="text-blue-800"><strong>Assigned to:</strong> <span id="modalScheduleAssignedTo" class="font-bold"></span></p>
                     </div>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2 text-sm">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 text-sm">
+                        <!-- Customer -->
                         <div>
-                            <p class="mb-1"><strong>Customer:</strong> <span id="modalScheduleCustomer"></span></p>
-                            <p><strong>Phone:</strong> <span id="modalSchedulePhone"></span></p>
+                            <label class="font-bold">Customer:</label>
+                            <span class="view-mode-field" id="modalScheduleCustomer"></span>
+                            <input type="text" id="modalScheduleCustomerInput" class="edit-mode-field form-input form-input-sm hidden">
                         </div>
-                        <p><strong>Address:</strong> <span id="modalScheduleAddress"></span></p>
-                        <p class="md:col-span-2"><strong>Issue:</strong> <span id="modalScheduleIssue"></span></p>
-                        <p><strong>Warranty:</strong> <span id="modalScheduleWarrantyProvider"></span></p>
-                        <p><strong>Plan:</strong> <span id="modalSchedulePlanType"></span></p>
-                        <p class="md:col-span-2"><strong>PO Number:</strong> <span id="modalScheduleDispatchOrPoNumber"></span></p>
+                        <!-- Phone -->
+                        <div>
+                            <label class="font-bold">Phone:</label>
+                            <span class="view-mode-field" id="modalSchedulePhone"></span>
+                            <input type="text" id="modalSchedulePhoneInput" class="edit-mode-field form-input form-input-sm hidden">
+                        </div>
+                        <!-- Address -->
+                        <div class="md:col-span-2">
+                            <label class="font-bold">Address:</label>
+                            <span class="view-mode-field" id="modalScheduleAddress"></span>
+                            <input type="text" id="modalScheduleAddressInput" class="edit-mode-field form-input form-input-sm hidden">
+                        </div>
+                        <!-- Issue -->
+                        <div class="md:col-span-2">
+                            <label class="font-bold">Issue:</label>
+                            <span class="view-mode-field" id="modalScheduleIssue"></span>
+                            <textarea id="modalScheduleIssueInput" class="edit-mode-field form-input form-input-sm hidden" rows="3"></textarea>
+                        </div>
+                        <!-- Warranty -->
+                        <div>
+                            <label class="font-bold">Warranty:</label>
+                            <span class="view-mode-field" id="modalScheduleWarrantyProvider"></span>
+                            <input type="text" id="modalScheduleWarrantyProviderInput" class="edit-mode-field form-input form-input-sm hidden">
+                        </div>
+                        <!-- Plan -->
+                        <div>
+                            <label class="font-bold">Plan:</label>
+                            <span class="view-mode-field" id="modalSchedulePlanType"></span>
+                            <input type="text" id="modalSchedulePlanTypeInput" class="edit-mode-field form-input form-input-sm hidden">
+                        </div>
+                        <!-- PO Number -->
+                        <div class="md:col-span-2">
+                            <label class="font-bold">PO Number:</label>
+                            <span class="view-mode-field" id="modalScheduleDispatchOrPoNumber"></span>
+                            <input type="text" id="modalScheduleDispatchOrPoNumberInput" class="edit-mode-field form-input form-input-sm hidden">
+                        </div>
                     </div>
                 </div>
 
