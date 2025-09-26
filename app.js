@@ -1601,6 +1601,9 @@ function populateJobDetailsInputs(job) {
 async function openScheduleJobModal(job) {
     if (!job) return;
 
+    // Create a shallow copy to preserve the original, unmodified job state for checks.
+    const originalJob = { ...job };
+
     // Always start in view mode
     toggleJobDetailsEditMode(false);
 
@@ -1718,8 +1721,9 @@ async function openScheduleJobModal(job) {
 
             // 4. Determine UI visibility and the technician to check against
             let technicianIdForCheck = job.assignedTechnicianId;
-            if (job.assignedTechnicianId && job.assignedTechnicianName) { // Check for name as well
-                assignedToEl.textContent = job.assignedTechnicianName;
+            // Use the originalJob object for the conditional check to avoid state pollution.
+            if (originalJob.assignedTechnicianId && originalJob.assignedTechnicianName) {
+                assignedToEl.textContent = job.assignedTechnicianName; // Display current/mutated name
                 assignedToContainer.classList.remove('hidden');
             } else if (tripSheetsExistForDate) {
                 technicianContainer.classList.remove('hidden');
