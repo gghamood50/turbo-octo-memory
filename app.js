@@ -948,9 +948,14 @@ function openAllJobsOverlay(invoices, technicianName = 'All Technicians') {
     const searchInput = document.getElementById('jobsSearchInput');
     if (!tableBody || !allJobsOverlay || !searchInput) return;
 
-    const baseFilteredInvoices = technicianName === 'All Technicians'
-        ? invoices
-        : invoices.filter(invoice => invoice.workerName && invoice.workerName.toLowerCase() === technicianName.toLowerCase());
+    // This function will be used to get the base set of invoices for rendering.
+    // It now always references the global `currentFilteredData` to ensure it's up-to-date.
+    const getBaseInvoices = () => {
+        const sourceData = currentFilteredData; // Always use the latest global data
+        return technicianName === 'All Technicians'
+            ? sourceData
+            : sourceData.filter(invoice => invoice.workerName && invoice.workerName.toLowerCase() === technicianName.toLowerCase());
+    };
 
     const renderJobs = (invoicesToRender) => {
         const sortedInvoices = [...invoicesToRender].sort((a, b) => (b.createdAt?.toDate() || 0) - (a.createdAt?.toDate() || 0));
@@ -975,10 +980,13 @@ function openAllJobsOverlay(invoices, technicianName = 'All Technicians') {
         }).join('');
     };
 
-    renderJobs(baseFilteredInvoices);
+    // Initial render uses the latest data.
+    renderJobs(getBaseInvoices());
     
     searchInput.value = '';
     searchInput.oninput = () => {
+        // Every time the user types, get the fresh base invoices.
+        const baseFilteredInvoices = getBaseInvoices();
         const searchTerms = searchInput.value.toLowerCase().split(' ').filter(term => term.trim() !== '');
         
         const searchFilteredInvoices = baseFilteredInvoices.filter(invoice => {
@@ -1015,12 +1023,19 @@ function openTechnicianInvoicesOverlay(technicianName) {
     if (!overlay || !title || !tableBody || !searchInput) return;
 
     title.textContent = `Invoices for ${technicianName}`;
-    const filteredInvoices = allInvoicesData.filter(inv => inv.workerName && inv.workerName.toLowerCase() === technicianName.toLowerCase());
+
+    // Helper function to get the most current data set for this technician
+    const getBaseInvoices = () => {
+        return allInvoicesData.filter(inv => inv.workerName && inv.workerName.toLowerCase() === technicianName.toLowerCase());
+    };
     
-    renderTechnicianInvoices(filteredInvoices, tableBody);
+    // Initial render
+    renderTechnicianInvoices(getBaseInvoices(), tableBody);
 
     searchInput.value = '';
     searchInput.oninput = () => {
+        // Always get the fresh list from the global data source before filtering
+        const filteredInvoices = getBaseInvoices(); 
         const searchTerms = searchInput.value.toLowerCase().split(' ').filter(term => term.trim() !== '');
         
         const searchFilteredInvoices = filteredInvoices.filter(invoice => {
@@ -1082,14 +1097,20 @@ function openAllInvoicesOverlay() {
 
     if (!overlay || !title || !tableBody || !searchInput) return;
 
-    title.textContent = `All Invoices (${allInvoicesData.length})`;
+    // This function now handles rendering and title update together.
+    const renderAllInvoices = (invoices) => {
+        title.textContent = `All Invoices (${allInvoicesData.length})`; // Always show total count in title
+        renderTechnicianInvoices(invoices, tableBody);
+    };
     
-    renderTechnicianInvoices(allInvoicesData, tableBody);
+    // Initial render with all invoices.
+    renderAllInvoices(allInvoicesData);
 
     searchInput.value = '';
     searchInput.oninput = () => {
         const searchTerms = searchInput.value.toLowerCase().split(' ').filter(term => term.trim() !== '');
         
+        // Always filter from the master, up-to-date list.
         const searchFilteredInvoices = allInvoicesData.filter(invoice => {
             if (searchTerms.length === 0) return true;
 
@@ -1107,6 +1128,7 @@ function openAllInvoicesOverlay() {
                 );
             });
         });
+        // Render the filtered list. The title remains showing the total count.
         renderTechnicianInvoices(searchFilteredInvoices, tableBody);
     };
 
@@ -2700,20 +2722,55 @@ if(saveInvoiceBtn) {
     if(modalMarkPaidBtn) modalMarkPaidBtn.addEventListener('click', async function() {
         if (currentlyViewedInvoiceData) {
             const newStatus = currentlyViewedInvoiceData.status === 'paid' ? 'pending' : 'paid';
-            let invoiceToUpdate = { ...currentlyViewedInvoiceData, status: newStatus, updatedAt: new Date().toISOString() };
-            
-            const updatedPdfData = await generatePDF(invoiceToUpdate);
+            const invoiceId = currentlyViewedInvoiceData.id;
 
-            if (updatedPdfData) {
-                invoiceToUpdate.pdfDataURL = updatedPdfData;
-            } else {
-                console.warn("[Modal Mark Paid] Could not re-generate PDF on status change. Old PDF data (if any) will be kept.");
-            }
+            // Prepare the minimal update payload
+            const updatePayload = {
+                status: newStatus,
+                updatedAt: new Date().toISOString()
+            };
 
-            if (await saveInvoiceData(invoiceToUpdate, true, currentlyViewedInvoiceData.id)) { 
+            try {
+                // Directly update the document in Firestore for efficiency
+                const invoiceRef = db.collection('invoices').doc(invoiceId);
+                await invoiceRef.update(updatePayload);
+
                 showMessage(`Invoice #${currentlyViewedInvoiceData.invoiceNumber} marked as ${newStatus}.`, 'success');
-                allAdminInvoicesCache = [];
-                closeInvoiceViewModal(); 
+
+                // --- NEW LOGIC: Update local data and refresh the visible list ---
+
+                // 1. Update local cache to reflect the change immediately.
+                const updateLocalInvoice = (invoice) => {
+                    if (invoice.id === invoiceId) {
+                        // Create a new object to ensure reactivity if frameworks are used
+                        return { ...invoice, ...updatePayload };
+                    }
+                    return invoice;
+                };
+                allInvoicesData = allInvoicesData.map(updateLocalInvoice);
+                allWarrantiesData = allWarrantiesData.map(updateLocalInvoice);
+                currentFilteredData = currentFilteredData.map(updateLocalInvoice);
+
+                // 2. Check which "View All" overlay is visible and trigger its refresh by simulating an input event.
+                const allInvoicesOverlay = document.getElementById('allInvoicesListOverlay');
+                const techInvoicesOverlay = document.getElementById('technicianInvoicesOverlay');
+                const allJobsOverlay = document.getElementById('allJobsOverlay'); // This one shows completed jobs
+
+                if (allInvoicesOverlay && allInvoicesOverlay.classList.contains('is-visible')) {
+                    document.getElementById('allInvoicesListSearchInput').dispatchEvent(new Event('input'));
+                } else if (techInvoicesOverlay && techInvoicesOverlay.classList.contains('is-visible')) {
+                    document.getElementById('technicianInvoicesSearchInput').dispatchEvent(new Event('input'));
+                } else if (allJobsOverlay && allJobsOverlay.classList.contains('is-visible')) {
+                    document.getElementById('jobsSearchInput').dispatchEvent(new Event('input'));
+                }
+                // No 'else' needed. The main dashboard listeners will catch the data change for the small tables.
+
+                // 3. Close the modal.
+                closeInvoiceViewModal();
+
+            } catch (error) {
+                console.error("Error updating invoice status:", error);
+                showMessage(`Failed to update invoice: ${error.message}`, 'error');
             }
         }
     });
