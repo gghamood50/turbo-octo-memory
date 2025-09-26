@@ -25,6 +25,8 @@ let currentView = 'dashboard';
 let conversationHistory = [];
 let currentChatMode = 'tour_guide';
 let currentTripSheetListener = null;
+let currentLeftoverJobs = [];
+let leftoverJobsForApproval = [];
 let workerJobsListener = null; // Listener for the worker's specific jobs
 let currentWorkerAssignedJobs = []; // To store jobs for the current worker view
 let currentWorkerTechnicianName = ''; // To store current worker's name for view rendering
@@ -490,8 +492,53 @@ function updateTechnicianCardUI(technicianId) {
     }
 }
 
-function renderTripSheets(tripSheets, date, isApproved = false) {
+function renderTripSheets(tripSheets, leftoverJobs, date, isApproved = false) {
     currentTripSheets = tripSheets;
+    currentLeftoverJobs = leftoverJobs || [];
+    const leftoverJobsSection = document.getElementById('leftover-jobs-section');
+
+    if (isApproved || !leftoverJobsSection) {
+        if(leftoverJobsSection) leftoverJobsSection.innerHTML = ''; // Clear it if it exists but is not needed
+    } else {
+        let leftoverHtml = '';
+        // We check leftoverJobs is not undefined and has items.
+        if (leftoverJobs && leftoverJobs.length > 0) {
+            leftoverHtml = `
+            <div class="p-4 bg-slate-50 border border-slate-200 rounded-lg" id="leftover-jobs-card">
+                <h4 class="font-semibold text-slate-800 text-lg mb-3 flex items-center">
+                    <span class="material-icons-outlined text-amber-500 mr-2">warning</span>
+                    <span>Leftover Jobs</span>
+                </h4>
+                <div class="tech-route-container space-y-2 min-h-[100px]" data-technician-id="leftover">
+                    ${leftoverJobs.map(job => `
+                        <div class="job-card p-3 border bg-white rounded-lg shadow-sm cursor-grab" data-job-id="${job.id}">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <p class="font-semibold text-sm text-slate-800">${job.address}</p>
+                                    <p class="text-xs text-slate-600">${job.customer} - ${job.issue}</p>
+                                </div>
+                            </div>
+                            <div class="mt-2 pt-2 border-t border-slate-100">
+                                <span class="text-xs font-medium bg-blue-100 text-blue-700 px-2 py-1 rounded-full">${job.timeSlot}</span>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+            `;
+        } else {
+            leftoverHtml = `
+            <div class="p-4 bg-green-50 border border-green-200 rounded-lg text-center">
+                <h4 class="font-semibold text-green-800 text-lg flex items-center justify-center">
+                    <span class="material-icons-outlined mr-2">check_circle</span>
+                    <span>No Jobs Are Left Over!</span>
+                </h4>
+            </div>
+            `;
+        }
+        leftoverJobsSection.innerHTML = leftoverHtml;
+    }
+
     if (!tripSheetsContainer) return;
 
     const displayDate = date ? new Date(date + 'T00:00:00').toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : "the selected date";
@@ -571,56 +618,74 @@ function renderTripSheets(tripSheets, date, isApproved = false) {
                 handle: '.job-card',
                 onEnd: async (evt) => {
                     const jobId = evt.item.dataset.jobId;
-                    const fromTechnicianId = evt.from.dataset.technicianId;
-                    const toTechnicianId = evt.to.dataset.technicianId;
+                    const fromId = evt.from.dataset.technicianId;
+                    const toId = evt.to.dataset.technicianId;
                     const newIndex = evt.newIndex;
-                    const oldIndex = evt.oldIndex;
-
-                    const sourceSheet = currentTripSheets.find(s => s.technicianId === fromTechnicianId);
-                    const destinationSheet = currentTripSheets.find(s => s.technicianId === toTechnicianId);
+                    const oldIndex = evt.oldIndex; // Keep oldIndex for reverts
                     
-                    if (!sourceSheet || !destinationSheet) {
-                        console.error("Could not find trip sheets for drag operation.");
+                    // If nothing changed, do nothing.
+                    if (fromId === toId && evt.oldIndex === newIndex) {
                         return;
                     }
 
-                    const jobToMove = sourceSheet.route.find(j => j.id === jobId);
-                    if (!jobToMove) {
-                         console.error("Could not find job to move in local state.");
-                         evt.from.insertBefore(evt.item, evt.from.children[oldIndex]);
-                         return;
-                    }
-                    
-                    const jobIndexInSource = sourceSheet.route.findIndex(j => j.id === jobId);
-                    sourceSheet.route.splice(jobIndexInSource, 1);
-                    destinationSheet.route.splice(newIndex, 0, jobToMove);
+                    let jobToMove;
+                    const date = tripSheetDateInput.value;
+                    const batch = db.batch();
 
-                    try {
-                        const batch = db.batch();
-                        const date = tripSheetDateInput.value;
+                    // --- Find and remove the job from its source array ---
+                    if (fromId !== 'leftover') {
+                        const sourceSheet = currentTripSheets.find(s => s.technicianId === fromId);
+                        if (!sourceSheet) { console.error(`Drag Error: Source sheet ${fromId} not found.`); return; }
                         
-                        const sourceSheetRef = db.collection('previewTripSheets').doc(`${date}_${fromTechnicianId}`);
+                        const jobIndex = sourceSheet.route.findIndex(j => j.id === jobId);
+                        if (jobIndex === -1) { console.error(`Drag Error: Job ${jobId} not found in source sheet.`); return; }
+
+                        [jobToMove] = sourceSheet.route.splice(jobIndex, 1);
+                        const sourceSheetRef = db.collection('previewTripSheets').doc(`${date}_${fromId}`);
                         batch.update(sourceSheetRef, { route: sourceSheet.route });
+                    } else { // Moving from the leftover list
+                        const jobIndex = currentLeftoverJobs.findIndex(j => j.id === jobId);
+                        if (jobIndex === -1) { console.error(`Drag Error: Job ${jobId} not found in leftovers.`); return; }
+                        [jobToMove] = currentLeftoverJobs.splice(jobIndex, 1);
+                    }
 
-                        if (fromTechnicianId !== toTechnicianId) {
-                            const destinationSheetRef = db.collection('previewTripSheets').doc(`${date}_${toTechnicianId}`);
-                            batch.update(destinationSheetRef, { route: destinationSheet.route });
-                        }
+                    if (!jobToMove) {
+                        console.error("Drag Error: Job to move is undefined.");
+                        // Revert UI change
+                        evt.from.insertBefore(evt.item, evt.from.children[oldIndex]);
+                        return;
+                    }
 
+                    // --- Add the job to its new destination array ---
+                    if (toId !== 'leftover') {
+                        const destinationSheet = currentTripSheets.find(s => s.technicianId === toId);
+                        if (!destinationSheet) { console.error(`Drag Error: Destination sheet ${toId} not found.`); return; }
+                        
+                        destinationSheet.route.splice(newIndex, 0, jobToMove);
+                        const destSheetRef = db.collection('previewTripSheets').doc(`${date}_${toId}`);
+                        batch.update(destSheetRef, { route: destinationSheet.route });
+                    } else { // Moving to the leftover list
+                        currentLeftoverJobs.splice(newIndex, 0, jobToMove);
+                    }
+
+                    // --- Commit changes to Firestore and update UI ---
+                    try {
                         await batch.commit();
                         
-                        updateTechnicianCardUI(fromTechnicianId);
-                        if (fromTechnicianId !== toTechnicianId) {
-                            updateTechnicianCardUI(toTechnicianId);
+                        // Update UI counters for affected technicians
+                        if (fromId !== 'leftover') updateTechnicianCardUI(fromId);
+                        if (toId !== 'leftover') updateTechnicianCardUI(toId);
+
+                        // If a job was moved to/from the leftover list, re-render the leftover section to show correct state
+                        if (fromId === 'leftover' || toId === 'leftover') {
+                             renderTripSheets(currentTripSheets, currentLeftoverJobs, date, false);
                         }
 
                     } catch (error) {
                         console.error("Error updating trip sheets after drag:", error);
                         showMessage("Error saving changes. Reverting.", "error");
-
-                        const [revertedJob] = destinationSheet.route.splice(newIndex, 1);
-                        sourceSheet.route.splice(jobIndexInSource, 0, revertedJob);
-                        evt.from.insertBefore(evt.item, evt.from.children[oldIndex]);
+                        // Revert UI by reloading all sheets from Firestore
+                        loadTripSheetsForDate(date);
                     }
                 }
             });
@@ -3744,13 +3809,43 @@ if(saveInvoiceBtn) {
     }
 });
 
-    if(approveTripSheetsBtn) approveTripSheetsBtn.addEventListener('click', async () => {
+    if(approveTripSheetsBtn) {
+        approveTripSheetsBtn.addEventListener('click', async () => {
+            if (!currentTripSheets || currentTripSheets.length === 0) {
+                showMessage("No trip sheets to approve.", "info");
+                return;
+            }
+
+            // Check for leftover jobs
+            if (currentLeftoverJobs && currentLeftoverJobs.length > 0) {
+                leftoverJobsForApproval = [...currentLeftoverJobs]; // Store for finalization
+                
+                const warningModal = document.getElementById('leftoverJobsWarningModal');
+                warningModal.style.display = 'block';
+
+                const confirmBtn = warningModal.querySelector('.confirm-btn');
+                const cancelBtn = warningModal.querySelector('.cancel-btn');
+                const closeBtn = warningModal.querySelector('.close-button');
+
+                const closeModal = () => warningModal.style.display = 'none';
+
+                confirmBtn.onclick = () => {
+                    closeModal();
+                    finalizeApproval();
+                };
+                cancelBtn.onclick = closeModal;
+                closeBtn.onclick = closeModal;
+
+            } else {
+                leftoverJobsForApproval = []; // Ensure it's empty
+                finalizeApproval();
+            }
+        });
+    }
+
+    async function finalizeApproval() {
         const date = tripSheetDateInput.value;
-        if (!currentTripSheets || currentTripSheets.length === 0) {
-            alert("No trip sheets to approve.");
-            return;
-        }
-    
+        
         approveTripSheetsBtn.disabled = true;
         approveTripSheetsBtn.innerHTML = `<span class="material-icons-outlined animate-spin">sync</span>Approving...`;
     
@@ -3758,17 +3853,13 @@ if(saveInvoiceBtn) {
             const batch = firebase.firestore().batch();
             const jobsToUpdate = new Map();
     
-            // 1. Prepare to move trip sheets and update jobs
             currentTripSheets.forEach(sheet => {
-                // Add trip sheet to the main collection
                 const newTripSheetRef = firebase.firestore().collection('tripSheets').doc(sheet.id);
                 batch.set(newTripSheetRef, sheet);
     
-                // Delete trip sheet from the preview collection
                 const oldTripSheetRef = firebase.firestore().collection('previewTripSheets').doc(sheet.id);
                 batch.delete(oldTripSheetRef);
     
-                // Collect all jobs that need their status updated
                 sheet.route.forEach(job => {
                     const liveJob = allJobsData.find(j => j.id === job.id);
                     if (liveJob && liveJob.status === 'Scheduled') {
@@ -3780,7 +3871,6 @@ if(saveInvoiceBtn) {
                 });
             });
     
-            // 2. Update the status of all collected jobs
             if (jobsToUpdate.size > 0) {
                 jobsToUpdate.forEach((techInfo, jobId) => {
                     const jobRef = firebase.firestore().doc(`jobs/${jobId}`);
@@ -3792,22 +3882,26 @@ if(saveInvoiceBtn) {
                     });
                 });
             }
+
+            // This is the new logic for handling leftover jobs
+            if (leftoverJobsForApproval.length > 0) {
+                leftoverJobsForApproval.forEach(job => {
+                    const jobRef = db.collection('jobs').doc(job.id);
+                    batch.update(jobRef, { status: 'Needs Scheduling' });
+                });
+            }
     
-            // 3. Commit all changes in one atomic operation
             await batch.commit();
     
-            // 4. Update UI
-            if (jobsToUpdate.size > 0) {
-                 scheduleStatus.textContent = `Successfully approved ${jobsToUpdate.size} jobs for ${date}. Trip sheets have been finalized.`;
-            } else {
-                scheduleStatus.textContent = `All jobs for ${date} were already approved. Trip sheets have been finalized.`;
+            let message = `Successfully approved ${jobsToUpdate.size} jobs for ${date}. Trip sheets have been finalized.`;
+            if (leftoverJobsForApproval.length > 0) {
+                message += ` ${leftoverJobsForApproval.length} leftover job(s) have been set back to 'Needs Scheduling'.`;
             }
+            scheduleStatus.textContent = message;
             
-            // The listener on previewTripSheets will automatically clear the UI,
-            // and we can disable the button.
             approveTripSheetsBtn.innerHTML = `<span class="material-icons-outlined">check_circle_outline</span>Sheets Approved`;
             approveTripSheetsBtn.disabled = true;
-    
+            leftoverJobsForApproval = []; // Clear the temporary array
     
         } catch (error) {
             console.error("Error approving trip sheets:", error);
@@ -3815,7 +3909,7 @@ if(saveInvoiceBtn) {
             approveTripSheetsBtn.disabled = false;
             approveTripSheetsBtn.innerHTML = `<span class="material-icons-outlined">check_circle</span>Approve Trip Sheets`;
         }
-    });
+    }
 
     if (tripSheetDateInput) {
         tripSheetDateInput.value = new Date().toISOString().split('T')[0];
@@ -4182,7 +4276,7 @@ if (sendAllInvoicesBtn) {
 });
 
 
-function loadTripSheetsForDate(dateString) {
+async function loadTripSheetsForDate(dateString) {
     if (!db || !dateString) {
         if (tripSheetsContainer) tripSheetsContainer.innerHTML = `<div class="text-center py-8 text-slate-400"><p>Please select a date to view trip sheets.</p></div>`;
         if (tripSheetApprovalContainer) tripSheetApprovalContainer.classList.add('hidden');
@@ -4193,29 +4287,49 @@ function loadTripSheetsForDate(dateString) {
         currentTripSheetListener(); 
     }
 
-    // We set up a listener on the preview collection.
-    // This allows the UI to update in real-time when sheets are generated.
     const previewQuery = firebase.firestore().collection("previewTripSheets").where("date", "==", dateString);
     
-    currentTripSheetListener = previewQuery.onSnapshot((previewSnapshot) => {
-        // Guard against stale listeners firing after the user has changed the date/view
+    currentTripSheetListener = previewQuery.onSnapshot(async (previewSnapshot) => {
         if (currentView !== 'schedule' || tripSheetDateInput.value !== dateString) {
             return;
         }
 
         if (!previewSnapshot.empty) {
-            // If we find sheets in the preview collection, we display them for approval.
             const sheets = previewSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            renderTripSheets(sheets, dateString, false); // Not approved
+
+            // --- NEW: Identify Leftover Jobs ---
+            try {
+                // 1. Get all jobs scheduled for the day
+                const scheduledJobsQuery = db.collection('jobs').where('scheduledDate', '==', dateString).where('status', '==', 'Scheduled');
+                const scheduledJobsSnapshot = await scheduledJobsQuery.get();
+                const allScheduledJobs = scheduledJobsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+                // 2. Get all jobs currently in the preview sheets
+                const jobsInSheets = new Set();
+                sheets.forEach(sheet => {
+                    sheet.route.forEach(job => jobsInSheets.add(job.id));
+                });
+
+                // 3. Find the difference
+                const leftoverJobs = allScheduledJobs.filter(job => !jobsInSheets.has(job.id));
+
+                // 4. Render with the new data
+                renderTripSheets(sheets, leftoverJobs, dateString, false);
+
+            } catch (error) {
+                console.error("Error fetching jobs to identify leftovers:", error);
+                // Render with an empty leftover list on error to avoid breaking the UI
+                renderTripSheets(sheets, [], dateString, false);
+            }
+            // --- END NEW LOGIC ---
+
         } else {
-            // If the preview collection is empty, we fall back to checking the main collection
-            // for already-approved sheets for that day.
+            // Fallback for approved sheets (no leftover section needed)
             const approvedQuery = firebase.firestore().collection("tripSheets").where("date", "==", dateString);
             approvedQuery.get().then(approvedSnapshot => {
-                // Another guard to ensure the date/view hasn't changed during the async fetch
                 if (currentView === 'schedule' && tripSheetDateInput.value === dateString) {
                     const sheets = approvedSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                    renderTripSheets(sheets, dateString, true); // Approved
+                    renderTripSheets(sheets, [], dateString, true); // Pass empty array for leftovers
                 }
             }).catch(error => {
                 console.error(`Error getting approved trip sheets for ${dateString}:`, error);
