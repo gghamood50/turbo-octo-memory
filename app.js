@@ -4235,6 +4235,14 @@ if (sendAllInvoicesBtn) {
             });
             // --- END FIX ---
 
+            // --- OPTIMISTIC UI UPDATE ---
+            const jobIndex = currentWorkerAssignedJobs.findIndex(j => j.id === jobId);
+            if (jobIndex !== -1) {
+                currentWorkerAssignedJobs[jobIndex].status = 'Completed';
+                renderWorkerPwaView(currentWorkerAssignedJobs, currentWorkerTechnicianName);
+            }
+            // --- END OPTIMISTIC UI UPDATE ---
+
             // The backend handles all Firestore writes now.
             showMessage("Invoices sent to office and saved to warranties successfully.", 'success');
 
