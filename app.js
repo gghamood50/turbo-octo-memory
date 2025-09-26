@@ -45,6 +45,7 @@ let allInvoicesData = [];
 let currentProvider = null;
 let currentFilteredData = [];
 let currentJobToReschedule = null;
+let scheduleModalAbortController = null;
 let currentWorkerTechnicianId = null;
 let invoiceImageFiles = [];
 
@@ -1767,9 +1768,17 @@ async function openScheduleJobModal(job) {
     };
 
     // Add event listeners
-    dateInput.addEventListener('change', updateModalState);
-    timeSlotSelect.addEventListener('change', updateModalState);
-    technicianSelect.addEventListener('change', updateModalState);
+    // Cancel any previous listeners to prevent memory leaks and state bugs
+    if (scheduleModalAbortController) {
+        scheduleModalAbortController.abort();
+    }
+    scheduleModalAbortController = new AbortController();
+    const { signal } = scheduleModalAbortController;
+
+    dateInput.addEventListener('change', updateModalState, { signal });
+    timeSlotSelect.addEventListener('change', updateModalState, { signal });
+    technicianSelect.addEventListener('change', updateModalState, { signal });
+
 
     // Link handling logic (remains the same)
     const linkContainer = document.getElementById('scheduleModalLinkContainer');
@@ -1806,6 +1815,10 @@ async function openScheduleJobModal(job) {
 }
 
 function closeScheduleJobModal() {
+    if (scheduleModalAbortController) {
+        scheduleModalAbortController.abort();
+        scheduleModalAbortController = null;
+    }
     scheduleJobModal.style.display = 'none';
     scheduleJobForm.reset();
 }
