@@ -3630,18 +3630,17 @@ if(saveInvoiceBtn) {
             }
 
             const invoicesToSend = [];
-            allWarrantiesData.forEach(warranty => {
-                if (warranty.job?.warrantyProvider?.toLowerCase().includes('home guard')) {
-                    warranty.invoices.forEach(invoice => {
-                        if (invoice.status !== 'paid' && invoice.status !== 'Claimed' && invoice.url) {
-                            invoicesToSend.push({
-                                warrantyId: warranty.id,
-                                invoiceNumber: invoice.invoiceNumber,
-                                claimsEmail: claimsEmail,
-                                pdfUrl: invoice.url
-                            });
-                        }
-                    });
+            allWarrantiesData.forEach(invoice => {
+                const pName = invoice.warrantyName?.toLowerCase() || '';
+                if (pName.includes('home guard')) {
+                    if (invoice.status !== 'paid' && invoice.status !== 'Claimed' && invoice.url) {
+                        invoicesToSend.push({
+                            warrantyId: invoice.id,
+                            invoiceNumber: invoice.invoiceNumber,
+                            claimsEmail: claimsEmail,
+                            pdfUrl: invoice.url
+                        });
+                    }
                 }
             });
 
