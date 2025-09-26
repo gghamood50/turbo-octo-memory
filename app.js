@@ -957,7 +957,21 @@ function openAllJobsOverlay(invoices, technicianName = 'All Technicians') {
         title.textContent = `${technicianName} - Completed Jobs (${sortedInvoices.length})`;
         tableBody.innerHTML = sortedInvoices.map(invoice => {
             const completionDate = invoice.createdAt?.toDate().toLocaleDateString() || 'N/A';
-            return `<tr><td class="font-medium text-slate-800">${invoice.customerName||'N/A'}</td><td>${invoice.customerAddress||'N/A'}</td><td>${completionDate}</td><td>${invoice.workerName||'N/A'}</td><td><button class="btn-secondary-stitch view-invoice-btn" data-id="${invoice.id}">View Details</button></td></tr>`;
+            const statusClass = invoice.status === 'paid' ? 'status-completed' : 'status-needs-scheduling';
+            const typeClass = (invoice.invoiceType || '').toLowerCase() === 'warranty' ? 'status-awaiting-completion' : 'status-link-sent';
+
+            return `
+                <tr>
+                    <td class="font-medium text-slate-800">${invoice.invoiceNumber || 'N/A'}</td>
+                    <td>${invoice.customerName || 'N/A'}</td>
+                    <td>${completionDate}</td>
+                    <td><span class="status-pill ${typeClass}">${invoice.invoiceType || 'N/A'}</span></td>
+                    <td>${formatCurrency(invoice.total)}</td>
+                    <td>${invoice.workerName || 'N/A'}</td>
+                    <td><span class="status-pill ${statusClass}">${invoice.status || 'N/A'}</span></td>
+                    <td><button class="btn-secondary-stitch view-invoice-btn" data-id="${invoice.id}">View Details</button></td>
+                </tr>
+            `;
         }).join('');
     };
 
@@ -980,7 +994,9 @@ function openAllJobsOverlay(invoices, technicianName = 'All Technicians') {
                     (invoice.customerPhone && invoice.customerPhone.toLowerCase().includes(term)) ||
                     (invoice.poNumber && invoice.poNumber.toLowerCase().includes(term)) ||
                     (invoiceDate.includes(term)) ||
-                    (invoice.warrantyName && invoice.warrantyName.toLowerCase().includes(term))
+                    (invoice.warrantyName && invoice.warrantyName.toLowerCase().includes(term)) ||
+                    (invoice.status && invoice.status.toLowerCase().includes(term)) || // Search by status
+                    (invoice.invoiceType && invoice.invoiceType.toLowerCase().includes(term)) // Search by type
                 );
             });
         });
