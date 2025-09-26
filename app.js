@@ -1600,6 +1600,7 @@ function populateJobDetailsInputs(job) {
 
 async function openScheduleJobModal(job) {
     if (!job) return;
+    currentJobToReschedule = { ...job };
 
     // Create a shallow copy to preserve the original, unmodified job state for checks.
     const originalJob = { ...job };
