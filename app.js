@@ -1590,25 +1590,56 @@ async function handleRescheduleConfirm() {
     const jobRef = firebase.firestore().doc(`jobs/${currentJobToReschedule.id}`);
     const newStatus = `Rescheduled by ${currentWorkerTechnicianName || 'Worker'}`;
 
+    // --- OPTIMISTIC UI UPDATE ---
+    // 1. Find the job in the local array and update it.
+    const jobIndex = currentWorkerAssignedJobs.findIndex(j => j.id === currentJobToReschedule.id);
+    if (jobIndex !== -1) {
+        currentWorkerAssignedJobs[jobIndex].status = newStatus;
+        // Ensure the participatingTechnicians array exists and add the current worker's ID
+        if (!currentWorkerAssignedJobs[jobIndex].participatingTechnicians) {
+            currentWorkerAssignedJobs[jobIndex].participatingTechnicians = [];
+        }
+        if (!currentWorkerAssignedJobs[jobIndex].participatingTechnicians.includes(currentWorkerTechnicianId)) {
+            currentWorkerAssignedJobs[jobIndex].participatingTechnicians.push(currentWorkerTechnicianId);
+        }
+    }
+
+    // 2. Immediately re-render the UI with the updated local data.
+    closeRescheduleModal();
+    // Restore the main job list view header
+    if (workerNameEl) workerNameEl.textContent = `Hello, ${currentWorkerTechnicianName}`;
+    if (workerCurrentDateEl) workerCurrentDateEl.style.display = 'block';
+    const todaysRouteHeading = document.getElementById('todaysRouteHeading');
+    if (todaysRouteHeading) todaysRouteHeading.style.display = 'block';
+    renderWorkerPwaView(currentWorkerAssignedJobs, currentWorkerTechnicianName);
+    // --- END OPTIMISTIC UI UPDATE ---
+
     try {
+        // 3. Persist the change to the database in the background.
         await jobRef.update({
             status: newStatus,
             rescheduleReason: reason,
+            // Ensure the worker remains a participant, so the job stays in their view.
+            participatingTechnicians: firebase.firestore.FieldValue.arrayUnion(currentWorkerTechnicianId),
             assignedTechnicianId: firebase.firestore.FieldValue.delete(),
             assignedTechnicianName: firebase.firestore.FieldValue.delete()
         });
         showMessage('Job has been rescheduled.', 'success');
-        closeRescheduleModal();
-        // The listener will automatically refresh the view, but we need to go back to the list
-        if (workerNameEl) workerNameEl.textContent = `Hello, ${currentWorkerTechnicianName}`;
-        if (workerCurrentDateEl) workerCurrentDateEl.style.display = 'block';
-        const todaysRouteHeading = document.getElementById('todaysRouteHeading');
-        if (todaysRouteHeading) todaysRouteHeading.style.display = 'block';
-        renderWorkerPwaView(currentWorkerAssignedJobs, currentWorkerTechnicianName);
+        // No need to re-render here, it's already done. The listener will eventually
+        // receive the update from Firestore, but the UI change is already visible.
 
     } catch (error) {
         console.error("Error rescheduling job:", error);
         showMessage('Failed to reschedule job. Please try again.', 'error');
+        
+        // --- REVERT UI ON FAILURE ---
+        // If the database update fails, revert the change in the UI.
+        if (jobIndex !== -1) {
+            // We need the original status. We can get it from the `currentJobToReschedule` object
+            // which was a snapshot of the job when the modal was opened.
+            currentWorkerAssignedJobs[jobIndex].status = currentJobToReschedule.status;
+            renderWorkerPwaView(currentWorkerAssignedJobs, currentWorkerTechnicianName);
+        }
     }
 }
 
@@ -2158,7 +2189,7 @@ async function fetchAndRenderJobsForDate(date, technicianId, technicianName) {
 
     try {
         const jobsQuery = firebase.firestore().collection("jobs")
-            .where("assignedTechnicianId", "==", technicianId)
+            .where("participatingTechnicians", "array-contains", technicianId)
             .where("scheduledDate", "==", dateString);
         
         const snapshot = await jobsQuery.get();
@@ -2172,13 +2203,21 @@ async function fetchAndRenderJobsForDate(date, technicianId, technicianName) {
         if (sheetDoc.exists) {
             const sheetData = sheetDoc.data();
             const orderedJobIds = sheetData.route.map(j => j.id);
+            const jobsInSheetSet = new Set(orderedJobIds);
 
+            // Get the jobs that are on the route, in the correct order
             const jobsById = new Map(assignedJobs.map(job => [job.id, job]));
-            const correctlyOrderedJobs = orderedJobIds.map(id => jobsById.get(id)).filter(Boolean);
+            const orderedJobsOnRoute = orderedJobIds.map(id => jobsById.get(id)).filter(Boolean);
+
+            // Get jobs that are NOT on the route (e.g., rescheduled, completed)
+            const jobsNotOnRoute = assignedJobs.filter(job => !jobsInSheetSet.has(job.id));
+
+            // Combine them, with active jobs first, followed by others
+            const finalJobsList = [...orderedJobsOnRoute, ...jobsNotOnRoute];
             
-            renderWorkerPwaView(correctlyOrderedJobs, technicianName);
+            renderWorkerPwaView(finalJobsList, technicianName);
         } else {
-            // No trip sheet, render in default order
+            // No trip sheet, render all jobs for the day in default order
             renderWorkerPwaView(assignedJobs, technicianName);
         }
 
@@ -2210,7 +2249,6 @@ function listenForWorkerJobs(technicianId, technicianName) {
     workerJobsListener = jobsQuery.onSnapshot(async (snapshot) => {
         const assignedJobs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         
-        // Step 2: Fetch the trip sheet to get the correct order
         const tripSheetId = `${todayDateString}_${technicianId}`;
         const tripSheetRef = db.collection("tripSheets").doc(tripSheetId);
         const sheetDoc = await tripSheetRef.get();
@@ -2218,14 +2256,22 @@ function listenForWorkerJobs(technicianId, technicianName) {
         if (sheetDoc.exists) {
             const sheetData = sheetDoc.data();
             const orderedJobIds = sheetData.route.map(j => j.id);
+            const jobsInSheetSet = new Set(orderedJobIds);
 
+            // Get the jobs that are on the route, in the correct order
             const jobsById = new Map(assignedJobs.map(job => [job.id, job]));
-            const correctlyOrderedJobs = orderedJobIds.map(id => jobsById.get(id)).filter(Boolean);
+            const orderedJobsOnRoute = orderedJobIds.map(id => jobsById.get(id)).filter(Boolean);
+
+            // Get jobs that are NOT on the route (e.g., rescheduled, completed)
+            const jobsNotOnRoute = assignedJobs.filter(job => !jobsInSheetSet.has(job.id));
+
+            // Combine them, with active jobs first, followed by others
+            const finalJobsList = [...orderedJobsOnRoute, ...jobsNotOnRoute];
             
-            currentWorkerAssignedJobs = correctlyOrderedJobs;
-            renderWorkerPwaView(correctlyOrderedJobs, technicianName);
+            currentWorkerAssignedJobs = finalJobsList;
+            renderWorkerPwaView(finalJobsList, technicianName);
         } else {
-            // No trip sheet, render in default order
+            // No trip sheet, render all jobs for the day in default order
             currentWorkerAssignedJobs = assignedJobs;
             renderWorkerPwaView(assignedJobs, technicianName);
         }
