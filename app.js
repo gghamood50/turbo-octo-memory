@@ -1878,10 +1878,17 @@ async function openScheduleJobModal(job) {
                     // Defensively check if the button should be disabled.
                     confirmBtn.disabled = false; // Default to enabled
                     if (jobInRoute) {
-                        const existingSlotInRoute = String(jobInRoute.timeSlot || '').trim();
-                        const newlySelectedSlot = String(selectedTimeSlot || '').trim();
+                        const existingSlotInRoute = String((jobInRoute.timeSlot || '')).trim();
+                        const newlySelectedSlot = String((selectedTimeSlot || '')).trim();
+                        const isRescheduled = (job.status || '').startsWith('Rescheduled');
 
-                        if (existingSlotInRoute === newlySelectedSlot) {
+                        // Disable if awaiting completion, or if it's an exact match but NOT a reschedule.
+                        if (job.status === 'Awaiting completion') {
+                            confirmBtn.disabled = true;
+                            if (confirmBtnWrapper) {
+                                confirmBtnWrapper.setAttribute('title', "This job is active on the worker's PWA and cannot be moved.");
+                            }
+                        } else if (existingSlotInRoute === newlySelectedSlot && !isRescheduled) {
                             confirmBtn.disabled = true;
                             if (confirmBtnWrapper) {
                                 confirmBtnWrapper.setAttribute('title', "Job is already in this trip sheet for this time slot.");
