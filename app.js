@@ -1545,8 +1545,64 @@ function closeEditTechModal() {
     editTechForm.reset();
 }
 
+function toggleJobDetailsEditMode(isEditing) {
+    const section = document.getElementById('jobDetailsSection');
+    if (!section) return;
+
+    const viewFields = section.querySelectorAll('.view-mode-field');
+    const editFields = section.querySelectorAll('.edit-mode-field');
+    
+    viewFields.forEach(field => field.classList.toggle('hidden', isEditing));
+    editFields.forEach(field => field.classList.toggle('hidden', !isEditing));
+
+    // Toggle buttons in the header
+    document.getElementById('editJobDetailsBtn').classList.toggle('hidden', isEditing);
+    document.getElementById('saveJobDetailsBtn').classList.toggle('hidden', !isEditing);
+    document.getElementById('cancelEditJobDetailsBtn').classList.toggle('hidden', !isEditing);
+
+    // Disable/Enable footer buttons
+    document.getElementById('sendManualLinkBtn').disabled = isEditing;
+    document.getElementById('confirmScheduleBtn').disabled = isEditing;
+    document.getElementById('cancelScheduleJob').disabled = isEditing;
+
+    // If entering view mode, reset inputs to original values to cancel changes
+    if (!isEditing) {
+        if (currentJobToReschedule) {
+            populateJobDetailsInputs(currentJobToReschedule);
+        }
+    }
+}
+
+function populateJobDetailsInputs(job) {
+    // This helper function populates both view spans and edit inputs
+    document.getElementById('modalScheduleCustomer').textContent = job.customer || 'N/A';
+    document.getElementById('modalScheduleCustomerInput').value = job.customer || '';
+
+    document.getElementById('modalSchedulePhone').textContent = job.phone || 'N/A';
+    document.getElementById('modalSchedulePhoneInput').value = job.phone || '';
+
+    document.getElementById('modalScheduleAddress').textContent = job.address || 'N/A';
+    document.getElementById('modalScheduleAddressInput').value = job.address || '';
+
+    document.getElementById('modalScheduleIssue').textContent = job.issue || 'N/A';
+    document.getElementById('modalScheduleIssueInput').value = job.issue || '';
+
+    document.getElementById('modalScheduleWarrantyProvider').textContent = job.warrantyProvider || 'N/A';
+    document.getElementById('modalScheduleWarrantyProviderInput').value = job.warrantyProvider || '';
+
+    document.getElementById('modalSchedulePlanType').textContent = job.planType || 'N/A';
+    document.getElementById('modalSchedulePlanTypeInput').value = job.planType || '';
+
+    document.getElementById('modalScheduleDispatchOrPoNumber').textContent = job.dispatchOrPoNumber || 'N/A';
+    document.getElementById('modalScheduleDispatchOrPoNumberInput').value = job.dispatchOrPoNumber || '';
+}
+
+
 async function openScheduleJobModal(job) {
     if (!job) return;
+
+    // Always start in view mode
+    toggleJobDetailsEditMode(false);
 
     const schedulingControlsContainer = document.getElementById('schedulingControlsContainer');
     const associatedInvoicesSection = document.getElementById('associatedInvoicesSection');
@@ -1582,13 +1638,9 @@ async function openScheduleJobModal(job) {
 
     currentJobToReschedule = job; // Store the job globally for this modal
     document.getElementById('modalScheduleJobId').value = job.id;
-    document.getElementById('modalScheduleCustomer').textContent = job.customer || 'N/A';
-    document.getElementById('modalSchedulePhone').textContent = job.phone || 'N/A';
-    document.getElementById('modalScheduleAddress').textContent = job.address || 'N/A';
-    document.getElementById('modalScheduleIssue').textContent = job.issue || 'N/A';
-    document.getElementById('modalScheduleWarrantyProvider').textContent = job.warrantyProvider || 'N/A';
-    document.getElementById('modalSchedulePlanType').textContent = job.planType || 'N/A';
-    document.getElementById('modalScheduleDispatchOrPoNumber').textContent = job.dispatchOrPoNumber || 'N/A';
+    
+    // Populate both view and edit fields
+    populateJobDetailsInputs(job);
 
     const summaryContainer = document.getElementById('modalScheduleSummaryContainer');
     const summaryEl = document.getElementById('modalScheduleSummary');
@@ -2108,6 +2160,62 @@ function listenForWorkerJobs(technicianId, technicianName) {
 
 // --- Form Submit Handlers & Event Listeners ---
 document.addEventListener('DOMContentLoaded', () => {
+    const editJobDetailsBtn = document.getElementById('editJobDetailsBtn');
+    const saveJobDetailsBtn = document.getElementById('saveJobDetailsBtn');
+    const cancelEditJobDetailsBtn = document.getElementById('cancelEditJobDetailsBtn');
+
+    if (editJobDetailsBtn) {
+        editJobDetailsBtn.addEventListener('click', () => toggleJobDetailsEditMode(true));
+    }
+    if (cancelEditJobDetailsBtn) {
+        cancelEditJobDetailsBtn.addEventListener('click', () => toggleJobDetailsEditMode(false));
+    }
+    
+    if (saveJobDetailsBtn) {
+        saveJobDetailsBtn.addEventListener('click', async () => {
+            const jobId = document.getElementById('modalScheduleJobId').value;
+            if (!jobId) {
+                showMessage('Could not save changes: Job ID is missing.', 'error');
+                return;
+            }
+
+            const updatedData = {
+                customer: document.getElementById('modalScheduleCustomerInput').value,
+                phone: document.getElementById('modalSchedulePhoneInput').value,
+                address: document.getElementById('modalScheduleAddressInput').value,
+                issue: document.getElementById('modalScheduleIssueInput').value,
+                warrantyProvider: document.getElementById('modalScheduleWarrantyProviderInput').value,
+                planType: document.getElementById('modalSchedulePlanTypeInput').value,
+                dispatchOrPoNumber: document.getElementById('modalScheduleDispatchOrPoNumberInput').value,
+            };
+
+            saveJobDetailsBtn.disabled = true;
+            saveJobDetailsBtn.innerHTML = `<span class="material-icons-outlined text-lg animate-spin">sync</span> Saving...`;
+
+            try {
+                const jobRef = db.collection('jobs').doc(jobId);
+                await jobRef.update(updatedData);
+
+                // Update the local data to reflect the change immediately
+                const jobIndex = allJobsData.findIndex(j => j.id === jobId);
+                if (jobIndex > -1) {
+                    allJobsData[jobIndex] = { ...allJobsData[jobIndex], ...updatedData };
+                }
+                currentJobToReschedule = { ...currentJobToReschedule, ...updatedData };
+                
+                showMessage('Job details updated successfully!', 'success');
+                toggleJobDetailsEditMode(false); // Switch back to view mode
+                populateJobDetailsInputs(currentJobToReschedule); // Refresh view with new data
+            } catch (error) {
+                console.error("Error updating job details:", error);
+                showMessage(`Error: ${error.message}`, 'error');
+            } finally {
+                saveJobDetailsBtn.disabled = false;
+                saveJobDetailsBtn.innerHTML = `<span class="material-icons-outlined text-lg">save</span> Save Changes`;
+            }
+        });
+    }
+
     // Consolidated DOM element declarations
     const loginForm = document.getElementById('loginForm');
     const loginEmailInput = document.getElementById('loginEmail');
