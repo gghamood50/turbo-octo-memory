@@ -12,59 +12,104 @@ const firestore = new Firestore({ projectId: PROJECT_ID });
 const vertexAI = new VertexAI({ project: PROJECT_ID, location: LOCATION });
 const generativeModel = vertexAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
-/** 🔒 Overkill, high-precision scheduling prompt */
+/** ✅ Safer, lenient-but-exact scheduling prompt */
 const SYSTEM_PROMPT = `
-You are an expert QA scheduler analyzing a phone-call transcript between an AGENT and a CUSTOMER.
-Your job: determine if an appointment was scheduled for a valid window and extract the scheduled date if present.
+You are an expert QA scheduler analyzing a PHONE CALL transcript between an AGENT and a CUSTOMER.
 
-Valid windows (MUST MATCH EXACTLY):
+GOAL: Decide if an appointment was scheduled into one of these EXACT windows and extract the date.
+
+Valid windows (canonical targets):
 - "8am to 2pm"
 - "9am to 4pm"
 - "12pm to 6pm"
 
+ACCEPTED EQUIVALENTS (normalize to the canonical forms above if clearly the same):
+- "8 to 2", "8am-2pm", "8 am to 2 pm" → "8am to 2pm"
+- "9 to 4", "9am-4pm", "9 am to 4 pm", "between 9 and 4" → "9am to 4pm"
+- "12 to 6", "12pm-6pm", "12 pm to 6 pm" → "12pm to 6pm"
+
 Decision rules:
 1) "scheduled" ONLY if:
-   - The CUSTOMER accepts one of the valid windows (exact match), AND
-   
-2) If acceptance is ambiguous, tentative ("maybe", "I'll think", "call me later"), or there is no explicit recap, return "not_scheduled".
-3) Voicemail/no answer/wrong number/any non-listed window -> "not_scheduled".
-4) If multiple valid windows appear, choose the last one that is accepted by the CUSTOMER.
-5) NEVER normalize or invent windows. If a non-listed window is mentioned (e.g., "11am to 3pm"), return "not_scheduled".
-6) Try to EXTRACT the scheduled DATE from the transcript if it is clearly stated or inferable as a specific calendar day (e.g., "August 28, 2025" or "8/28/2025" or "28/08/2025" or "Wednesday the 28th").
-   - Output date in strict ISO format: YYYY-MM-DD.
-   - If the transcript uses RELATIVE terms (e.g., "tomorrow", "day after tomorrow") and you CANNOT convert them safely to an absolute date, set "scheduledDate" to null and set "relativeDay" accordingly:
-       * "next_day" for tomorrow
-       * "day_after" for the day after tomorrow
-       * null if not applicable
-7)(CRITICAL) Output MUST be JSON only (no markdown, no commentary), with EXACT keys & casing, ABSOLUTELY NO TEXT EXCEPT FOR A JSON:
+   - The CUSTOMER clearly accepts one (normalized) valid window, AND
+   - The acceptance is not tentative (no "maybe", "later", "not sure").
 
+2) If the AGENT says it's scheduled BUT there is no CUSTOMER acceptance, return "not_scheduled".
+
+3) Voicemail/no answer/wrong number → "not_scheduled".
+
+4) If multiple valid windows were discussed, choose the LAST window that the CUSTOMER accepted.
+
+5) NEVER invent or infer a non-listed window. If a non-listed window appears, return "not_scheduled".
+
+Date handling:
+- You are given explicit context lines like:
+  base_date=YYYY-MM-DD
+  next_day=YYYY-MM-DD
+  day_after=YYYY-MM-DD
+  tz=Continent/City
+- If the transcript says "tomorrow", use next_day. If "day after tomorrow", use day_after.
+- If a full calendar date is spoken (e.g., "August 28, 2025" or "8/28/2025" or "Wednesday the 28th"), output ISO YYYY-MM-DD.
+- If you cannot safely determine an absolute date but timing is clearly "tomorrow" or "day after", set scheduledDate=null and set relativeDay accordingly ("next_day" / "day_after").
+- Otherwise leave both scheduledDate and relativeDay as null.
+
+OUTPUT (JSON only, no comments, no prose):
 {
   "outcome": "scheduled" | "not_scheduled",
   "timeSlot": "8am to 2pm" | "9am to 4pm" | "12pm to 6pm" | null,
-  "scheduledDate": string | null,   // ISO: YYYY-MM-DD if explicitly known
+  "scheduledDate": string | null,   // ISO YYYY-MM-DD if explicitly known
   "relativeDay": "next_day" | "day_after" | null
 }
 
 Constraints:
-- "timeSlot" is MANDATORY as a field. If "outcome" is "scheduled", "timeSlot" MUST be one of the valid windows (not null).
-- If "outcome" is "not_scheduled", "timeSlot" MUST be null, "scheduledDate" MUST be null, and "relativeDay" MUST be null.
-
-Examples of valid extractions (behavioral, do not copy text):
-- Customer: "Yes, the 9 to 4 works for me for Thursday August 28." Agent: "Perfect, I'll lock you for 9am to 4pm on August 28." 
-  -> outcome="scheduled", timeSlot="9am to 4pm", scheduledDate="2025-08-28", relativeDay=null
-- Customer: "Tomorrow works, let's do 12 to 6." Agent: "Booked for 12pm to 6pm tomorrow."
-  -> outcome="scheduled", timeSlot="12pm to 6pm", scheduledDate=null, relativeDay="next_day"
-- Voicemail or "call me later"
-  -> outcome="not_scheduled", timeSlot=null, scheduledDate=null, relativeDay=null
+- If "outcome"="scheduled", "timeSlot" MUST be one of the 3 canonical slots.
+- If "outcome"="not_scheduled", set timeSlot=null, scheduledDate=null, relativeDay=null.
 `;
 
-/** Extract first JSON object from text */
-function extractJson(text) {
+/** Robust JSON extractor: first balanced object only */
+function extractFirstJsonObject(text) {
   if (!text) return null;
-  const start = text.indexOf("{");
-  const end = text.lastIndexOf("}");
-  if (start === -1 || end === -1 || end <= start) return null;
-  try { return JSON.parse(text.slice(start, end + 1)); } catch { return null; }
+  let depth = 0, start = -1;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '{') {
+      if (depth === 0) start = i;
+      depth++;
+    } else if (ch === '}') {
+      depth--;
+      if (depth === 0 && start !== -1) {
+        const candidate = text.slice(start, i + 1);
+        try { return JSON.parse(candidate); } catch {}
+        // continue scanning if parse failed
+        start = -1;
+      }
+    }
+  }
+  return null;
+}
+
+/** Normalize obvious slot equivalents to canonical allowed windows */
+function normalizeSlot(s) {
+  if (!s) return null;
+  const t = String(s).toLowerCase().replace(/\s+/g, ' ').trim();
+  const simple = t
+    .replace(/between\s+/g, '')     // "between 9 and 4" → "9 and 4"
+    .replace(/\sam\s/g, 'am ')
+    .replace(/\spm\s/g, 'pm ')
+    .replace(/-/g, ' to ')
+    .replace(/\s+and\s+/g, ' to ');
+  if (/(^| )8( ?am)? to 2( ?pm)?$/.test(simple)) return "8am to 2pm";
+  if (/(^| )9( ?am)? to 4( ?pm)?$/.test(simple)) return "9am to 4pm";
+  if (/(^| )12( ?pm)? to 6( ?pm)?$/.test(simple)) return "12pm to 6pm";
+  // also catch tight forms like "9 to 4"
+  if (/^9 to 4$/.test(simple)) return "9am to 4pm";
+  if (/^8 to 2$/.test(simple)) return "8am to 2pm";
+  if (/^12 to 6$/.test(simple)) return "12pm to 6pm";
+  return null;
+}
+
+function mentionsTomorrow(t) {
+  if (!t) return false;
+  return /\b(tomorrow|next day)\b/i.test(t);
 }
 
 /** Resolve job doc by blandCallId/callId/job id */
@@ -121,6 +166,11 @@ async function safeUpdateStatus(jobRef, status, errorReason = null, extra = {}) 
   await jobRef.set(update, { merge: true });
 }
 
+const NO_ANSWER_TAGS = new Set([
+  "no_answer","no-answer","voicemail","noanswer","busy","failed","not_connected","did_not_answer"
+]);
+
+// ... inside your handler:
 functions.http("blandAiWebhook", async (req, res) => {
   const started = Date.now();
   const requestId = req.get("X-Request-Id") || `local-${started}`;
@@ -195,10 +245,40 @@ functions.http("blandAiWebhook", async (req, res) => {
       );
       return res.status(200).json({ ...baseResponse, status: "ok_idempotent" });
     }
+    const disposition = (payload.disposition_tag || "").toLowerCase();
+    const transcript = concatenated_transcript || "";
 
-    // Build Vertex request
+    // 🔒 HARD GUARDS: skip model if we know it's not a real conversation
+    if (NO_ANSWER_TAGS.has(disposition)) {
+      await safeUpdateStatus(jobRef, "Manual Follow-up", "No answer/voicemail", dbUpdate);
+      return res.status(200).json({ ...baseResponse, status: "manual_follow_up_no_answer" });
+    }
+    // If transcript has no customer turns at all, do not schedule
+    const hasCustomerTurn = /\b(user|customer)\s*:/.test(transcript.toLowerCase());
+    if (!hasCustomerTurn) {
+      await safeUpdateStatus(jobRef, "Manual Follow-up", "No customer utterances detected", dbUpdate);
+      return res.status(200).json({ ...baseResponse, status: "manual_follow_up_no_customer" });
+    }
+
+    // Build explicit date context for the model
+    const baseDate = request_data?.today || null;
+    const nextDay = request_data?.date_next_day || null;
+    const dayAfter = request_data?.date_after_day || null;
+    const tz = request_data?.tz || request_data?.timezone || null;
+
+    const contextLines = [
+      baseDate ? `base_date=${baseDate}` : null,
+      nextDay ? `next_day=${nextDay}` : null,
+      dayAfter ? `day_after=${dayAfter}` : null,
+      tz ? `tz=${tz}` : null,
+    ].filter(Boolean).join("\n");
+
+    // Vertex request (JSON-only with schema)
     const vertexRequest = {
-      contents: [{ role: "user", parts: [{ text: concatenated_transcript }]}],
+      contents: [{
+        role: "user",
+        parts: [{ text: `${contextLines}\n---\n${transcript}` }]
+      }],
       systemInstruction: { role: "system", parts: [{ text: SYSTEM_PROMPT }] },
       generationConfig: {
         temperature: 0,
@@ -215,18 +295,8 @@ functions.http("blandAiWebhook", async (req, res) => {
                 { type: "null" },
               ],
             },
-            scheduledDate: {
-              anyOf: [
-                { type: "string", format: "date" }, // ISO YYYY-MM-DD
-                { type: "null" },
-              ],
-            },
-            relativeDay: {
-              anyOf: [
-                { type: "string", enum: ["next_day", "day_after"] },
-                { type: "null" },
-              ],
-            },
+            scheduledDate: { anyOf: [{ type: "string", format: "date" }, { type: "null" }] },
+            relativeDay: { anyOf: [{ type: "string", enum: ["next_day", "day_after"] }, { type: "null" }] },
           },
           required: ["outcome", "timeSlot", "scheduledDate", "relativeDay"],
           additionalProperties: false,
@@ -238,82 +308,62 @@ functions.http("blandAiWebhook", async (req, res) => {
     let parsed = null;
     try {
       const result = await generativeModel.generateContent(vertexRequest);
-      const cands = result?.response?.candidates || [];
-      const parts = cands[0]?.content?.parts || [];
-      const text = parts[0]?.text || "";
-      parsed = extractJson(text);
+      const text = result?.response?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      parsed = extractFirstJsonObject(text);
       if (!parsed) throw new Error("Model did not return valid JSON.");
     } catch (vertexErr) {
       console.error("Vertex analysis failed:", vertexErr?.message || vertexErr);
-
-      // Minimal rule-based fallback
-      const t = (concatenated_transcript || "").toLowerCase();
-      const yes = /\b(yes|yeah|yep|okay|ok|perfect|works|that\s*works|sounds good|let's do it)\b/.test(t);
-      let guessedSlot = null;
-      if (t.includes("9am") && t.includes("4pm")) guessedSlot = "9am to 4pm";
-      else if (t.includes("8am") && t.includes("2pm")) guessedSlot = "8am to 2pm";
-      else if (t.includes("12pm") && t.includes("6pm")) guessedSlot = "12pm to 6pm";
-
-      parsed = yes && guessedSlot && ALLOWED_SLOTS.has(guessedSlot)
-        ? { outcome: "scheduled", timeSlot: guessedSlot, scheduledDate: null, relativeDay: /tomorrow/.test(t) ? "next_day" : null }
-        : { outcome: "not_scheduled", timeSlot: null, scheduledDate: null, relativeDay: null };
+      // 🚫 Conservative fallback: never auto-schedule on parsing/model errors
+      await safeUpdateStatus(jobRef, "Manual Follow-up", "Model/parse failure", dbUpdate);
+      return res.status(200).json({ ...baseResponse, status: "manual_follow_up_model_error" });
     }
 
-    // Post-parse validation
+    // Post-parse validation & normalization
     const isScheduled = parsed?.outcome === "scheduled";
-    const slot = parsed?.timeSlot ?? null;
+    const normalizedSlot = normalizeSlot(parsed?.timeSlot);
 
-    // timeSlot field is mandatory (always present); if scheduled then must be valid
-    if (isScheduled && !ALLOWED_SLOTS.has(slot)) {
-      console.warn("Invalid or missing timeSlot for a scheduled outcome; forcing manual follow-up", { slot });
-      await safeUpdateStatus(jobRef, "Manual Follow-up", "Invalid timeSlot for scheduled", dbUpdate);
+    if (isScheduled && !normalizedSlot) {
+      await safeUpdateStatus(jobRef, "Manual Follow-up", "Invalid or unrecognized timeSlot", dbUpdate);
       return res.status(200).json({ ...baseResponse, status: "manual_follow_up_invalid_slot" });
     }
 
-    // Determine scheduledDate with required fallback behavior
     let scheduledDate = parsed?.scheduledDate || null;
 
-    // If model didn't give an absolute date, try relative mapping first
-    if (!scheduledDate && isScheduled) {
-      if (parsed?.relativeDay === "day_after" && request_data?.date_after_day) {
-        scheduledDate = request_data.date_after_day;
-      }
+    // Fix common "tomorrow" mismatch cases
+    if (isScheduled && !scheduledDate) {
+      if (parsed?.relativeDay === "day_after" && dayAfter) scheduledDate = dayAfter;
+      else if (parsed?.relativeDay === "next_day" && nextDay) scheduledDate = nextDay;
+      else if (mentionsTomorrow(transcript) && nextDay) scheduledDate = nextDay;
     }
-    // Your requested forced fallback: if scheduled and still no date, use date_next_day
-    if (!scheduledDate && isScheduled && request_data?.date_next_day) {
-      scheduledDate = request_data.date_next_day;
-    }
-    // As a very last resort (rare), if request_data.scheduledDate exists, use it
-    if (!scheduledDate && isScheduled && request_data?.scheduledDate) {
+
+    // Last-chance fallbacks provided by your caller
+    if (isScheduled && !scheduledDate && request_data?.scheduledDate) {
       scheduledDate = request_data.scheduledDate;
     }
 
-    if (isScheduled) {
-      if (!scheduledDate) {
-        // Could not determine a date even after fallbacks -> manual follow-up (data safety)
-        await safeUpdateStatus(jobRef, "Manual Follow-up", "Missing scheduledDate after fallbacks", {
-          ...dbUpdate,
-          lastWebhookAt: FieldValue.serverTimestamp(),
-          lastWebhookDisposition: payload.disposition_tag || null,
-        });
-        return res.status(200).json({ ...baseResponse, status: "manual_follow_up_missing_date" });
-      }
+    if (isScheduled && !scheduledDate) {
+      await safeUpdateStatus(jobRef, "Manual Follow-up", "Missing scheduledDate after normalization", {
+        ...dbUpdate,
+        lastWebhookAt: FieldValue.serverTimestamp(),
+        lastWebhookDisposition: payload.disposition_tag || null,
+      });
+      return res.status(200).json({ ...baseResponse, status: "manual_follow_up_missing_date" });
+    }
 
+    if (isScheduled) {
       const update = {
         ...dbUpdate,
         status: "Scheduled",
-        timeSlot: slot,
+        timeSlot: normalizedSlot,
         scheduledDate,
-        blandCallId: call_id || jobData?.blandCallId || null,
+        blandCallId: call_id || null,
         lastWebhookAt: FieldValue.serverTimestamp(),
         lastWebhookDisposition: payload.disposition_tag || null,
-        // ensure no snake_case remains
         time_slot: FieldValue.delete(),
         scheduled_date: FieldValue.delete(),
       };
       await jobRef.set(update, { merge: true });
-      console.info(`Job ${jobRef.id} scheduled`, { timeSlot: slot, scheduledDate });
-      return res.status(200).json({ ...baseResponse, status: "scheduled", timeSlot: slot, scheduledDate });
+      return res.status(200).json({ ...baseResponse, status: "scheduled", timeSlot: normalizedSlot, scheduledDate });
     } else {
       await safeUpdateStatus(jobRef, "Manual Follow-up", null, {
         ...dbUpdate,
