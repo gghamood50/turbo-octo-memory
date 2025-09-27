@@ -36,7 +36,7 @@ Decision rules:
        * "next_day" for tomorrow
        * "day_after" for the day after tomorrow
        * null if not applicable
-7) Output MUST be JSON only (no markdown, no commentary), with EXACT keys & casing:
+7)(CRITICAL) Output MUST be JSON only (no markdown, no commentary), with EXACT keys & casing, ABSOLUTELY NO TEXT EXCEPT FOR A JSON:
 
 {
   "outcome": "scheduled" | "not_scheduled",
