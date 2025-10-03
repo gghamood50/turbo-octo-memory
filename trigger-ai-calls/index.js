@@ -83,6 +83,44 @@ const CALL_WINDOW = Object.freeze({
   timeZone: 'America/Los_Angeles',
 });
 
+// === Caching & concurrency helpers ===
+const DEFAULT_CONCURRENCY = Number(process.env.CALL_CONCURRENCY ?? 20);
+
+let _cache = {
+  apiKey: null,
+  availabilityByDate: new Map(), // date -> availability object
+};
+
+async function getApiKeyCached() {
+  if (_cache.apiKey) return _cache.apiKey;
+  _cache.apiKey = await getBlandApiKey();
+  return _cache.apiKey;
+}
+
+async function getAvailabilityCached(date) {
+  if (_cache.availabilityByDate.has(date)) {
+    return _cache.availabilityByDate.get(date);
+  }
+  const av = await getAvailability(date);
+  _cache.availabilityByDate.set(date, av);
+  return av;
+}
+
+// Simple worker-pool for concurrency limiting (no deps)
+async function mapWithConcurrency(items, limit, workerFn) {
+  const results = new Array(items.length);
+  let idx = 0;
+  const workers = Array(Math.min(limit, items.length)).fill(0).map(async () => {
+    while (true) {
+      const i = idx++;
+      if (i >= items.length) break;
+      results[i] = await workerFn(items[i], i);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
 /**
  * Returns the current hour (0–23) in the given IANA time zone.
  */
@@ -227,73 +265,82 @@ app.post('/', async (req, res) => {
 
     if (snapshot.empty) {
       console.log("No jobs found to update.");
-      // Always send a success response to the trigger.
       return res.status(200).send("OK: No jobs to update.");
     }
 
-    // 4. Process each job individually.
-    const promises = [];
-    snapshot.forEach(doc => {
-      const jobData = doc.data();
+    // Prefetch shared inputs ONCE per run
+    const dateNextDay = getTomorrowInLosAngeles();
+    const availability = await getAvailabilityCached(dateNextDay);
+    const { primary_gap, secondary_gap, final_gap } = availability;
+    const blandAiApiKey = await getApiKeyCached();
+
+    const docs = snapshot.docs;
+
+    await mapWithConcurrency(docs, DEFAULT_CONCURRENCY, async (doc) => {
       const jobId = doc.id;
       const jobRef = db.collection("jobs").doc(jobId);
 
-      // The main logic for each job is wrapped in a promise.
-      // This allows us to process jobs in parallel and wait for all to complete.
-      const processingPromise = (async () => {
-        try {
-          console.log(`Processing job with ID: ${jobId}`);
-
-          // Step 1: Get API Key and Availability
-          const blandAiApiKey = await getBlandApiKey();
-          const dateNextDay = getTomorrowInLosAngeles();
-          const availability = await getAvailability(dateNextDay);
-          const { primary_gap, secondary_gap, final_gap } = availability;
-
-          // Step 2: Construct the payload for Bland AI
-          const customer_name = jobData.customer;
-          const phone = jobData.phone;
-          // Use a test number for the specific customer number, otherwise use the job's phone.
-          const phone_to_call = (phone === '+18777804236') ? '+971507471805' : phone;
-
-          const blandAiPayload = {
-            customer_name: customer_name,
-            date_next_day: dateNextDay,
-            primary_gap: primary_gap,
-            secondary_gap: secondary_gap,
-            final_gap: final_gap,
-            callback_num: "+971507471805", // Static callback number
-            phone_to_call: phone_to_call,
-          };
-
-          // Step 3: Prepare and send the API request
-          const blandAiRequest = prepareBlandAiRequest(blandAiApiKey, blandAiPayload);
-          const call_id = await sendBlandAiCall(blandAiRequest);
-
-          // Step 4: Update the job with the success status and call ID
-          await jobRef.update({
-            status: "AI Call Initiated",
-            blandCallId: call_id,
-          });
-
-          console.log(`Successfully initiated AI call for job ${jobId}. Call ID: ${call_id}`);
-
-        } catch (error) {
-          // If any step fails, log the error and update the job status to "AI Call Failed".
-          console.error(`Failed to process job ${jobId}:`, error.message);
-          await jobRef.update({
-            status: "AI Call Failed",
-            errorReason: error.message,
-          });
+      // --- Idempotency/lock: take a per-job lock via transaction ---
+      const locked = await db.runTransaction(async (t) => {
+        const snap = await t.get(jobRef);
+        const d = snap.data() || {};
+        // Only proceed if it's still eligible and not locked
+        if (d.status !== "Link Sent!" || d.callInProgress === true) {
+          return false; // another worker/instance has it, or it's no longer eligible
         }
-      })();
-      promises.push(processingPromise);
+        t.update(jobRef, {
+          callInProgress: true,
+          callLockAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        return true;
+      });
+
+      if (!locked) {
+        console.log(`Skip ${jobId}: already processed, not eligible, or locked.`);
+        return;
+      }
+
+      try {
+        console.log(`Processing job with ID: ${jobId}`);
+
+        // Build payload using shared date/availability + per-job data
+        const jobData = doc.data();
+        const customer_name = jobData.customer;
+        const phone = jobData.phone;
+        const phone_to_call = (phone === '+18777804236') ? '+971507471805' : phone;
+
+        const blandAiPayload = {
+          customer_name,
+          date_next_day: dateNextDay,
+          primary_gap,
+          secondary_gap,
+          final_gap,
+          callback_num: "+971507471805",
+          phone_to_call,
+        };
+
+        const blandAiRequest = prepareBlandAiRequest(blandAiApiKey, blandAiPayload);
+        const call_id = await sendBlandAiCall(blandAiRequest);
+
+        await jobRef.update({
+          status: "AI Call Initiated",
+          blandCallId: call_id,
+          callInProgress: false,
+          callAttemptedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+
+        console.log(`Successfully initiated AI call for job ${jobId}. Call ID: ${call_id}`);
+      } catch (error) {
+        console.error(`Failed to process job ${jobId}:`, error.message);
+        await jobRef.update({
+          status: "AI Call Failed",
+          errorReason: error.message,
+          callInProgress: false,
+          callAttemptedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      }
     });
 
-    // Wait for all job processing promises to settle.
-    await Promise.all(promises);
-
-    // 5. Log the result and send a success response.
     const count = snapshot.size;
     console.log(`Attempted to process ${count} job(s).`);
     res.status(200).send(`OK: Attempted to process ${count} job(s). Check logs for details.`);
