@@ -75,6 +75,44 @@ const axios = require('axios');
 const { SecretManagerServiceClient } = require('@google-cloud/secret-manager');
 const app = express();
 
+// === Quiet-hours configuration (California) ===
+// Defaults to 09:00–21:00 America/Los_Angeles. Can be overridden via env for ops flexibility.
+const CALL_WINDOW = Object.freeze({
+  startHour: Number(process.env.CALL_WINDOW_START_HOUR ?? 9),   // inclusive
+  endHour:   Number(process.env.CALL_WINDOW_END_HOUR   ?? 21),  // exclusive
+  timeZone: 'America/Los_Angeles',
+});
+
+/**
+ * Returns the current hour (0–23) in the given IANA time zone.
+ */
+function getLocalHour(timeZone) {
+  return Number(new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hour: 'numeric',
+    hour12: false
+  }).format(new Date()));
+}
+
+/**
+ * Returns a formatted "now" string in the given time zone (for logs).
+ */
+function formatNowInTZ(timeZone) {
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    dateStyle: 'medium',
+    timeStyle: 'short'
+  }).format(new Date());
+}
+
+/**
+ * True if current local hour is within [startHour, endHour) in the configured time zone.
+ */
+function isWithinCallWindowNow({ startHour, endHour, timeZone }) {
+  const h = getLocalHour(timeZone);
+  return h >= startHour && h < endHour;
+}
+
 /**
  * Fetches the Bland AI API key from Google Cloud Secret Manager.
  *
@@ -158,6 +196,19 @@ const db = admin.firestore();
 
 // Create a handler for POST requests, which is what Eventarc sends.
 app.post('/', async (req, res) => {
+  // Quiet-hours guard: block outbound AI calls outside 09:00–21:00 LA time.
+  if (!isWithinCallWindowNow(CALL_WINDOW)) {
+    const nowLA = formatNowInTZ(CALL_WINDOW.timeZone);
+    const hourLA = getLocalHour(CALL_WINDOW.timeZone);
+    console.log(
+      `[QuietHours] Skipping call placement. Now in LA: ${nowLA} (hour=${hourLA}). ` +
+      `Allowed window: ${CALL_WINDOW.startHour}:00–${CALL_WINDOW.endHour}:00 ${CALL_WINDOW.timeZone}.`
+    );
+    // Optionally, you could mark eligible jobs as "Waiting for Call Window" here,
+    // but we intentionally return early to avoid extra reads/writes and costs.
+    return res.status(200).send('OK: Quiet hours in California; no calls placed.');
+  }
+
   console.log("Starting trigger-ai-calls job.");
 
   try {
