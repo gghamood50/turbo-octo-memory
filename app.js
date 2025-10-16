@@ -1186,6 +1186,59 @@ function openTechnicianSelectionOverlay() {
 function closeModal(modal) { if (modal) modal.style.display = 'none'; }
 function closeOverlay(overlay) { if(overlay) overlay.classList.remove('is-visible'); }
 
+function openTranscriptModal(transcript) {
+    const modal = document.getElementById('transcriptModal');
+    const chatbox = document.getElementById('transcriptChatbox');
+    const closeBtn = document.getElementById('closeTranscriptModal');
+
+    if (!modal || !chatbox || !closeBtn) {
+        console.error('Transcript modal elements not found.');
+        return;
+    }
+
+    // Clear previous content
+    chatbox.innerHTML = '';
+
+    // Parse and display the new transcript
+    const lines = transcript.split('\n').filter(line => line.trim() !== '' && !line.startsWith('agent-action:'));
+
+    lines.forEach(line => {
+        const parts = line.split(':');
+        const speaker = parts.shift().trim().toLowerCase();
+        const message = parts.join(':').trim();
+
+        if (speaker && message) {
+            const bubble = document.createElement('div');
+            bubble.classList.add('chat-bubble');
+            if (speaker === 'assistant') {
+                bubble.classList.add('chat-bubble-agent');
+                bubble.textContent = message;
+            } else if (speaker === 'user') {
+                bubble.classList.add('chat-bubble-customer');
+                bubble.textContent = message;
+            }
+            chatbox.appendChild(bubble);
+        }
+    });
+
+    modal.style.display = 'block';
+
+    // Event listener to close the modal
+    const closeTheModal = () => {
+        modal.style.display = 'none';
+        window.removeEventListener('click', outsideClickHandler);
+    };
+
+    const outsideClickHandler = (event) => {
+        if (event.target === modal) {
+            closeTheModal();
+        }
+    };
+
+    closeBtn.addEventListener('click', closeTheModal, { once: true });
+    window.addEventListener('click', outsideClickHandler);
+}
+
 function listenForWarranties() {
     const warrantiesQuery = firebase.firestore().collection("invoices").where("invoiceType", "in", ["warranty", "Warranty", "WARRANTY"]);
     warrantiesQuery.onSnapshot((snapshot) => {
@@ -1783,6 +1836,21 @@ async function openScheduleJobModal(job) {
         if (job.summary && job.summary.trim() !== '') {
             summaryEl.textContent = job.summary;
             summaryContainer.classList.remove('hidden');
+
+            const showTranscriptBtn = document.getElementById('showTranscriptBtn');
+            if (showTranscriptBtn) {
+                if (job.transcript && job.transcript.trim() !== '') {
+                    showTranscriptBtn.classList.remove('hidden');
+                    // Remove old listener before adding a new one to prevent duplicates
+                    const newBtn = showTranscriptBtn.cloneNode(true);
+                    showTranscriptBtn.parentNode.replaceChild(newBtn, showTranscriptBtn);
+                    newBtn.addEventListener('click', () => {
+                        openTranscriptModal(job.transcript);
+                    });
+                } else {
+                    showTranscriptBtn.classList.add('hidden');
+                }
+            }
         } else {
             summaryContainer.classList.add('hidden');
         }
