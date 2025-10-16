@@ -1276,6 +1276,9 @@
                 <div id="modalScheduleSummaryContainer" class="hidden text-sm p-3 bg-green-50 border border-green-200 rounded-lg">
                     <p><strong>Call summary:</strong></p>
                     <p id="modalScheduleSummary" class="mt-1 whitespace-pre-wrap"></p>
+                    <div class="mt-2 text-right">
+                        <button id="showTranscriptBtn" class="text-link hidden">Show Full Conversation</button>
+                    </div>
                 </div>
 
                 <!-- Associated Invoices Section -->
@@ -1363,6 +1366,21 @@
             <div class="modal-footer">
                 <button id="cancelFitInSheet" type="button" class="btn-secondary-stitch">Cancel</button>
                 <button id="confirmFitInSheet" type="button" class="btn-primary-stitch hidden">Confirm Placement</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Transcript Modal -->
+    <div id="transcriptModal" class="modal modal-level-2" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 class="modal-title">Full Conversation Transcript</h2>
+                <span class="close-button" id="closeTranscriptModal">&times;</span>
+            </div>
+            <div class="modal-body" id="transcriptModalBody">
+                <div class="chatbox-container" id="transcriptChatbox">
+                    <!-- Transcript content will be injected here by app.js -->
+                </div>
             </div>
         </div>
     </div>
