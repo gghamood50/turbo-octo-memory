@@ -1637,57 +1637,66 @@ async function handleRescheduleConfirm() {
     }
 
     const jobRef = firebase.firestore().doc(`jobs/${currentJobToReschedule.id}`);
-    const newStatus = `Rescheduled by ${currentWorkerTechnicianName || 'Worker'}`;
+    
+    // Determine if the reschedule is from the admin or worker view
+    const isAdminReschedule = layoutContainer.style.display === 'flex';
+    const newStatus = isAdminReschedule ? 'Rescheduled by Admin' : `Rescheduled by ${currentWorkerTechnicianName || 'Worker'}`;
 
-    // --- OPTIMISTIC UI UPDATE ---
-    // 1. Find the job in the local array and update it.
-    const jobIndex = currentWorkerAssignedJobs.findIndex(j => j.id === currentJobToReschedule.id);
-    if (jobIndex !== -1) {
-        currentWorkerAssignedJobs[jobIndex].status = newStatus;
-        // Ensure the participatingTechnicians array exists and add the current worker's ID
-        if (!currentWorkerAssignedJobs[jobIndex].participatingTechnicians) {
-            currentWorkerAssignedJobs[jobIndex].participatingTechnicians = [];
+    if (isAdminReschedule) {
+        // --- ADMIN LOGIC ---
+        closeRescheduleModal();
+        try {
+            await jobRef.update({
+                status: newStatus,
+                rescheduleReason: reason,
+                assignedTechnicianId: firebase.firestore.FieldValue.delete(),
+                assignedTechnicianName: firebase.firestore.FieldValue.delete(),
+                scheduledDate: firebase.firestore.FieldValue.delete(),
+                timeSlot: firebase.firestore.FieldValue.delete(),
+            });
+            showMessage('Job has been rescheduled by Admin.', 'success');
+            closeScheduleJobModal(); // Close the main job modal as well
+        } catch (error) {
+            console.error("Error rescheduling job from admin view:", error);
+            showMessage('Failed to reschedule job. Please try again.', 'error');
         }
-        if (!currentWorkerAssignedJobs[jobIndex].participatingTechnicians.includes(currentWorkerTechnicianId)) {
-            currentWorkerAssignedJobs[jobIndex].participatingTechnicians.push(currentWorkerTechnicianId);
-        }
-    }
 
-    // 2. Immediately re-render the UI with the updated local data.
-    closeRescheduleModal();
-    // Restore the main job list view header
-    if (workerNameEl) workerNameEl.textContent = `Hello, ${currentWorkerTechnicianName}`;
-    if (workerCurrentDateEl) workerCurrentDateEl.style.display = 'block';
-    const todaysRouteHeading = document.getElementById('todaysRouteHeading');
-    if (todaysRouteHeading) todaysRouteHeading.style.display = 'block';
-    renderWorkerPwaView(currentWorkerAssignedJobs, currentWorkerTechnicianName);
-    // --- END OPTIMISTIC UI UPDATE ---
-
-    try {
-        // 3. Persist the change to the database in the background.
-        await jobRef.update({
-            status: newStatus,
-            rescheduleReason: reason,
-            // Ensure the worker remains a participant, so the job stays in their view.
-            participatingTechnicians: firebase.firestore.FieldValue.arrayUnion(currentWorkerTechnicianId),
-            assignedTechnicianId: firebase.firestore.FieldValue.delete(),
-            assignedTechnicianName: firebase.firestore.FieldValue.delete()
-        });
-        showMessage('Job has been rescheduled.', 'success');
-        // No need to re-render here, it's already done. The listener will eventually
-        // receive the update from Firestore, but the UI change is already visible.
-
-    } catch (error) {
-        console.error("Error rescheduling job:", error);
-        showMessage('Failed to reschedule job. Please try again.', 'error');
-        
-        // --- REVERT UI ON FAILURE ---
-        // If the database update fails, revert the change in the UI.
+    } else {
+        // --- WORKER LOGIC (Optimistic UI) ---
+        const jobIndex = currentWorkerAssignedJobs.findIndex(j => j.id === currentJobToReschedule.id);
         if (jobIndex !== -1) {
-            // We need the original status. We can get it from the `currentJobToReschedule` object
-            // which was a snapshot of the job when the modal was opened.
-            currentWorkerAssignedJobs[jobIndex].status = currentJobToReschedule.status;
-            renderWorkerPwaView(currentWorkerAssignedJobs, currentWorkerTechnicianName);
+            currentWorkerAssignedJobs[jobIndex].status = newStatus;
+            if (!currentWorkerAssignedJobs[jobIndex].participatingTechnicians) {
+                currentWorkerAssignedJobs[jobIndex].participatingTechnicians = [];
+            }
+            if (!currentWorkerAssignedJobs[jobIndex].participatingTechnicians.includes(currentWorkerTechnicianId)) {
+                currentWorkerAssignedJobs[jobIndex].participatingTechnicians.push(currentWorkerTechnicianId);
+            }
+        }
+
+        closeRescheduleModal();
+        if (workerNameEl) workerNameEl.textContent = `Hello, ${currentWorkerTechnicianName}`;
+        if (workerCurrentDateEl) workerCurrentDateEl.style.display = 'block';
+        const todaysRouteHeading = document.getElementById('todaysRouteHeading');
+        if (todaysRouteHeading) todaysRouteHeading.style.display = 'block';
+        renderWorkerPwaView(currentWorkerAssignedJobs, currentWorkerTechnicianName);
+
+        try {
+            await jobRef.update({
+                status: newStatus,
+                rescheduleReason: reason,
+                participatingTechnicians: firebase.firestore.FieldValue.arrayUnion(currentWorkerTechnicianId),
+                assignedTechnicianId: firebase.firestore.FieldValue.delete(),
+                assignedTechnicianName: firebase.firestore.FieldValue.delete()
+            });
+            showMessage('Job has been rescheduled.', 'success');
+        } catch (error) {
+            console.error("Error rescheduling job from worker view:", error);
+            showMessage('Failed to reschedule job. Please try again.', 'error');
+            if (jobIndex !== -1) {
+                currentWorkerAssignedJobs[jobIndex].status = currentJobToReschedule.status;
+                renderWorkerPwaView(currentWorkerAssignedJobs, currentWorkerTechnicianName);
+            }
         }
     }
 }
@@ -2012,6 +2021,16 @@ async function openScheduleJobModal(job) {
             sendManualLinkBtn.style.visibility = 'visible';
         } else {
             sendManualLinkBtn.style.visibility = 'hidden';
+        }
+    }
+
+    const adminRescheduleBtn = document.getElementById('adminRescheduleBtn');
+    if (adminRescheduleBtn) {
+        const status = job.status || 'Needs Scheduling';
+        if (status === 'Scheduled' || status === 'Awaiting completion') {
+            adminRescheduleBtn.classList.remove('hidden');
+        } else {
+            adminRescheduleBtn.classList.add('hidden');
         }
     }
     
@@ -3389,6 +3408,9 @@ if(saveInvoiceBtn) {
             if (techId) {
                 handleDeleteTechnician(techId);
             }
+        }
+        if (event.target.id === 'adminRescheduleBtn') {
+            openRescheduleModal(currentJobToReschedule);
         }
         const scheduleBtn = event.target.closest('.schedule-job-btn');
         if (scheduleBtn) {
