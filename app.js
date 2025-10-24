@@ -12,6 +12,7 @@ const firebaseConfig = {
 const GENERATE_TRIP_SHEETS_URL = 'https://generate-trip-sheets-216681158749.us-central1.run.app';
 const ASK_DANIEL_URL = 'https://ask-daniel-216681158749.us-central1.run.app';
 const SEND_SCHEDULING_LINKS_URL = 'https://send-manual-scheduling-links-216681158749.us-central1.run.app';
+const TRIGGER_AI_CALLS_URL = 'https://trigger-ai-calls-216681158749.us-central1.run.app';
 const SEND_HOMEGUARD_CLAIM_URL = 'https://send-homeguard-claim-216681158749.us-central1.run.app';
 const GET_JOBS_FOR_MAP_URL = 'https://get-jobs-for-map-216681158749.us-central1.run.app/getJobsForMap';
 
@@ -3042,22 +3043,34 @@ if(saveInvoiceBtn) {
 
     if(sendSchedulingLinksBtn) sendSchedulingLinksBtn.addEventListener('click', async () => {
         sendSchedulingLinksBtn.disabled = true;
-        sendSchedulingLinksBtn.innerHTML = `<span class="material-icons-outlined text-lg animate-spin">sync</span> Sending...`;
+        sendSchedulingLinksBtn.innerHTML = `<span class="material-icons-outlined text-lg animate-spin">sync</span> Triggering...`;
         
         try {
-            const response = await fetch(SEND_SCHEDULING_LINKS_URL, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({}) });
-            if (!response.ok) {
+            // Updated to call the trigger-ai-calls endpoint
+            const response = await fetch(TRIGGER_AI_CALLS_URL, { 
+                method: 'POST', 
+                headers: {'Content-Type': 'application/json'}, 
+                body: JSON.stringify({ manualTrigger: true }) // Send a flag to indicate manual trigger
+            });
+
+            if (response.status === 429) { // Quiet hours error
+                const errorResult = await response.json();
+                showMessage(errorResult.message || 'Calls cannot be triggered during quiet hours.', 'error');
+            } else if (!response.ok) {
                 const errorText = await response.text();
                 throw new Error(`Server responded with ${response.status}: ${errorText}`);
+            } else {
+                const result = await response.json();
+                showMessage(result.message || 'AI calls triggered successfully!', 'success');
             }
-            const result = await response.json();
-            showMessage(result.message || 'Links sent successfully!', 'success');
+
         } catch (error) {
-            console.error('Error sending scheduling links:', error);
+            console.error('Error triggering AI calls:', error);
             showMessage(`Error: ${error.message}`, 'error');
         } finally {
             sendSchedulingLinksBtn.disabled = false;
-            sendSchedulingLinksBtn.innerHTML = `<span class="material-icons-outlined text-lg">send</span>Send Scheduling Links`;
+            // Update button text to "Trigger AI Calls"
+            sendSchedulingLinksBtn.innerHTML = `<span class="material-icons-outlined text-lg">phone_in_talk</span>Trigger AI Calls`;
         }
     });
 
