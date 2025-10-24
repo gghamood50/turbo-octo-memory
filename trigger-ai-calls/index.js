@@ -234,32 +234,37 @@ const db = admin.firestore();
 
 // Create a handler for POST requests, which is what Eventarc sends.
 app.post('/', async (req, res) => {
+    const { manualTrigger } = req.body;
+    const isEventarc = req.headers['ce-specversion'];
+
+    // If it's a scheduled run (from Eventarc) AND it's a manual trigger, don't run.
+    // This prevents accidental runs if the scheduled job isn't disabled.
+    if (isEventarc && !manualTrigger) {
+        console.log("Skipping scheduled run. This function now only supports manual triggers.");
+        return res.status(200).send("OK: Scheduled run skipped.");
+    }
+    
   // Quiet-hours guard: block outbound AI calls outside 09:00–21:00 LA time.
   if (!isWithinCallWindowNow(CALL_WINDOW)) {
     const nowLA = formatNowInTZ(CALL_WINDOW.timeZone);
     const hourLA = getLocalHour(CALL_WINDOW.timeZone);
-    console.log(
-      `[QuietHours] Skipping call placement. Now in LA: ${nowLA} (hour=${hourLA}). ` +
-      `Allowed window: ${CALL_WINDOW.startHour}:00–${CALL_WINDOW.endHour}:00 ${CALL_WINDOW.timeZone}.`
-    );
-    // Optionally, you could mark eligible jobs as "Waiting for Call Window" here,
-    // but we intentionally return early to avoid extra reads/writes and costs.
+    const message = `[QuietHours] Skipping call placement. Now in LA: ${nowLA} (hour=${hourLA}). Allowed window: ${CALL_WINDOW.startHour}:00–${CALL_WINDOW.endHour}:00 ${CALL_WINDOW.timeZone}.`;
+    console.log(message);
+    
+    // If manually triggered, send a specific error code for the frontend to handle.
+    if (manualTrigger) {
+        return res.status(429).json({ success: false, message: "Calls cannot be made during quiet hours (9 PM - 9 AM California time)." });
+    }
+    
     return res.status(200).send('OK: Quiet hours in California; no calls placed.');
   }
 
   console.log("Starting trigger-ai-calls job.");
 
   try {
-    // 1. Get the current server timestamp.
-    const now = admin.firestore.Timestamp.now();
-
-    // 2. Calculate the cutoff timestamp for one hour ago.
-    const oneHourAgo = new admin.firestore.Timestamp(now.seconds - 3600, now.nanoseconds);
-
-    // 3. Query the 'jobs' collection.
-    const jobsToUpdateQuery = db.collection("jobs")
-      .where("status", "==", "Link Sent!")
-      .where("linkSentAt", "<=", oneHourAgo);
+    
+    // 3. Query the 'jobs' collection for jobs that need scheduling.
+    const jobsToUpdateQuery = db.collection("jobs").where("status", "==", "Needs Scheduling");
 
     const snapshot = await jobsToUpdateQuery.get();
 
@@ -285,7 +290,7 @@ app.post('/', async (req, res) => {
         const snap = await t.get(jobRef);
         const d = snap.data() || {};
         // Only proceed if it's still eligible and not locked
-        if (d.status !== "Link Sent!" || d.callInProgress === true) {
+        if (d.status !== "Needs Scheduling" || d.callInProgress === true) {
           return false; // another worker/instance has it, or it's no longer eligible
         }
         t.update(jobRef, {
