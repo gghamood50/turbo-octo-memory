@@ -1,0 +1,13 @@
+{
+  "name": "trigger-ai-calls",
+  "version": "1.0.0",
+  "description": "A Google Cloud Function to trigger AI calls.",
+  "main": "index.js",
+  "dependencies": {
+    "axios": "^1.7.2",
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "firebase-admin": "^12.1.0",
+    "@google-cloud/secret-manager": "^5.5.0"
+  }
+}
