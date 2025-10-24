@@ -74,6 +74,9 @@ const https = require('https');
 const axios = require('axios');
 const { SecretManagerServiceClient } = require('@google-cloud/secret-manager');
 const app = express();
+const cors = require('cors');
+
+app.use(cors());
 
 // === Quiet-hours configuration (California) ===
 // Defaults to 09:00–21:00 America/Los_Angeles. Can be overridden via env for ops flexibility.
