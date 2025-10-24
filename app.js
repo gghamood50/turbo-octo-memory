@@ -4823,7 +4823,7 @@ function initializeDanielAIChat() {
     chatLog.innerHTML = '';
     conversationHistory = [];
     
-    const initialMessage = "Hello! I'm Daniel, your AI assistant. I have access to all jobs, technicians, and inventory. How can I help you? Try asking 'How many jobs are unscheduled?' or 'Where is Khaled?'";
+    const initialMessage = "Hello! I'm Daniel, your AI Tour guide.  I can guide you through the app and help with various tasks. How can I assist you today?";
     appendToChatLog(initialMessage);
     conversationHistory.push({ role: 'model', parts: [{ text: initialMessage }] });
 
