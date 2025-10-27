@@ -76,7 +76,14 @@ const { SecretManagerServiceClient } = require('@google-cloud/secret-manager');
 const app = express();
 const cors = require('cors');
 
-app.use(cors());
+// Allow requests from your web app
+const corsOptions = {
+  origin: 'https://safewayos2.web.app',
+  optionsSuccessStatus: 200
+};
+
+app.use(cors(corsOptions));
+app.use(express.json()); // Middleware to parse JSON bodies
 
 // === Quiet-hours configuration (California) ===
 // Defaults to 09:00–21:00 America/Los_Angeles. Can be overridden via env for ops flexibility.
