@@ -1,59 +1,49 @@
+// Cloud Run + Eventarc (Firestore) — CloudEvents handler
 const functions = require('@google-cloud/functions-framework');
 const admin = require('firebase-admin');
 
-// Initialize the Firebase Admin SDK
 admin.initializeApp();
 
-/**
- * CloudEvent function that triggers on the creation of a new Firestore document in the 'jobs' collection.
- *
- * @param {object} cloudEvent The CloudEvent object.
- * @param {object} cloudEvent.data The data payload from the event.
- */
-functions.cloudEvent('sendNewJobNotification', async (cloudEvent) => {
-    const { jobId } = cloudEvent.params;
-    console.log(`New job document created: ${jobId}`);
+// Handles Firestore "document created" events for jobs/{jobId}
+functions.cloudEvent('sendNewJobNotification', async (event) => {
+  try {
+    // Useful breadcrumbs in logs
+    console.log('Event type:', event.type); // expect: google.cloud.firestore.document.v1.created
+    console.log('Subject:', event.subject); // e.g. .../documents/jobs/{jobId}
 
-    try {
-        // Fetch all admin FCM tokens from the 'admin_fcm_tokens' collection.
-        const tokensSnapshot = await admin.firestore().collection('admin_fcm_tokens').get();
-        if (tokensSnapshot.empty) {
-            console.log('No admin FCM tokens found. Exiting function.');
-            return;
-        }
+    // Extract jobId from the subject path if present
+    const jobId = (event.subject || '').split('/').pop();
+    if (jobId) console.log('New job created:', jobId);
 
-        const tokens = tokensSnapshot.docs.map(doc => doc.data().token).filter(Boolean);
-        if (tokens.length === 0) {
-            console.log('Tokens array is empty. Exiting function.');
-            return;
-        }
-        console.log(`Found ${tokens.length} admin tokens to send notification to.`);
+    const db = admin.firestore();
 
-        // Construct the FCM message payload.
-        const message = {
-            notification: {
-                title: 'New Job Alert!',
-                body: 'A new job just landed!'
-            },
-            tokens: tokens,
-        };
-
-        // Send the multicast message.
-        const response = await admin.messaging().sendMulticast(message);
-        console.log(`${response.successCount} messages were sent successfully.`);
-
-        // Handle and log any failed messages.
-        if (response.failureCount > 0) {
-            const failedTokens = [];
-            response.responses.forEach((resp, idx) => {
-                if (!resp.success) {
-                    failedTokens.push(tokens[idx]);
-                    console.error(`Failed to send notification to token: ${tokens[idx]}`, resp.error);
-                }
-            });
-            console.log('List of tokens that caused failures: ' + failedTokens.join(', '));
-        }
-    } catch (error) {
-        console.error('Fatal error sending new job notification:', error);
+    // Fetch admin tokens
+    const snapshot = await db.collection('admin_fcm_tokens').get();
+    if (snapshot.empty) {
+      console.log('No admin FCM tokens found.');
+      return;
     }
+
+    const tokens = snapshot.docs.map(d => d.get('token')).filter(Boolean);
+    if (!tokens.length) {
+      console.log('No valid tokens in admin_fcm_tokens.');
+      return;
+    }
+
+    // Send multicast push
+    const message = {
+      notification: { title: 'New Job Alert!', body: 'A new job just landed!' },
+      tokens
+    };
+
+    const res = await admin.messaging().sendMulticast(message);
+    console.log('Push result:', { successCount: res.successCount, failureCount: res.failureCount });
+
+    if (res.failureCount > 0) {
+      const failedTokens = res.responses.map((r, i) => (!r.success ? tokens[i] : null)).filter(Boolean);
+      console.log('Failed tokens:', failedTokens);
+    }
+  } catch (err) {
+    console.error('Error handling Firestore event:', err);
+  }
 });
