@@ -1526,10 +1526,11 @@ function showWorkerJobDetails(job) {
               id="onMyWayBtn"
               data-id="${job.id}"
               class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-[#0c7ff2] text-white text-sm font-bold leading-normal tracking-[0.015em] w-full disabled:bg-slate-400 disabled:cursor-not-allowed"
-              ${job.onMyWayMessageSent ? 'disabled' : ''}
+              disabled
             >
-              <span class="truncate">${job.onMyWayMessageSent ? 'Message Sent' : 'On My Way!'}</span>
+              <span class="truncate">send "On My Way! message"</span>
             </button>
+            <p class="text-xs text-center text-slate-500 mt-1">This button is disabled for legal concerns for now</p>
             <button
               class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-[#f0f2f5] text-[#111418] text-sm font-bold leading-normal tracking-[0.015em] w-full"
               id="createInvoiceBtn"
