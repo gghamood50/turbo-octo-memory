@@ -8,6 +8,8 @@ const firebaseConfig = {
     appId: "1:216681158749:web:35de32f542ad71fa7295b4"
 };
 
+firebase.initializeApp(firebaseConfig);
+
 // --- Cloud Function URLs ---
 const GENERATE_TRIP_SHEETS_URL = 'https://generate-trip-sheets-216681158749.us-central1.run.app';
 const ASK_DANIEL_URL = 'https://ask-daniel-216681158749.us-central1.run.app';
@@ -4368,12 +4370,50 @@ if (sendAllInvoicesBtn) {
     // Initialize Firebase and Auth State Change Listener
     try {
         if (!firebase.apps.length) {
-            firebase.initializeApp(firebaseConfig);
+            // This is already handled globally now
         }
         auth = firebase.auth();
         db = firebase.firestore();
         storage = firebase.storage();
+        const messaging = firebase.messaging();
         console.log("Firebase Initialized (Compat).");
+
+        // --- FCM Token Management ---
+        const VAPID_KEY = "BG9gp_etd4xZZujYau9k7jDkjLbns-Sqj0tXOuc2BAqd9B8vwI00-XhXhPjkqRPVI1wG4eYmzvR-3X7j0t1QOlo";
+
+        async function requestNotificationPermission() {
+            try {
+                const permission = await Notification.requestPermission();
+                if (permission === 'granted') {
+                    console.log('Notification permission granted.');
+                    const token = await messaging.getToken({ vapidKey: VAPID_KEY });
+                    if (token) {
+                        console.log('FCM Token:', token);
+                        await saveTokenToFirestore(token);
+                    } else {
+                        console.log('No registration token available. Request permission to generate one.');
+                    }
+                } else {
+                    console.log('Unable to get permission to notify.');
+                }
+            } catch (error) {
+                console.error('An error occurred while retrieving token. ', error);
+            }
+        }
+
+        async function saveTokenToFirestore(token) {
+            const tokenRef = db.collection('admin_fcm_tokens').doc(token);
+            try {
+                await tokenRef.set({
+                    token: token,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                console.log('Token saved to Firestore.');
+            } catch (error) {
+                console.error('Error saving token to Firestore: ', error);
+            }
+        }
+
 
         const loginScreen = document.getElementById('loginScreen');
         const layoutContainer = document.getElementById('layoutContainer');
@@ -4394,6 +4434,7 @@ if (sendAllInvoicesBtn) {
                 if (user.email === 'admin@safewayos2.app') {
                     // --- ADMIN ROLE ---
                     console.log("Admin user signed in:", user.email);
+                    requestNotificationPermission(); // Request permission for admin
                     loginScreen.style.display = 'none';
                     workerPwaView.classList.add('hidden');
                     layoutContainer.style.display = 'flex';
