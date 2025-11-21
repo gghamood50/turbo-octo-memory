@@ -4362,7 +4362,7 @@ if (sendAllInvoicesBtn) {
             showMessage(`Failed to send invoices: ${err.message}`, 'error');
         } finally {
             sendAllInvoicesBtn.disabled = false;
-            sendAllInvoicesBtn.textContent = 'Send All Invoices to Office';
+            sendAllInvoicesBtn.textContent = 'Send to Dispatch!';
         }
     });
 }
