@@ -15,16 +15,16 @@ const messaging = firebase.messaging();
 
 messaging.onBackgroundMessage(function(payload) {
     console.log('[sw.js] Received background message ', payload);
-    const notificationTitle = payload.data?.title || payload.notification?.title || 'New Notification';
+    const notificationTitle = payload.notification.title;
     const notificationOptions = {
-        body: payload.data?.body || payload.notification?.body,
+        body: payload.notification.body,
         icon: '/icons/icon-192x192.png'
     };
 
     self.registration.showNotification(notificationTitle, notificationOptions);
 });
 
-const CACHE_NAME = 'safewayos-cache-v10'; // Incremented cache version
+const CACHE_NAME = 'safewayos-cache-v12'; // Incremented cache version
 const urlsToCache = [
   '/',
   '/index.html',
