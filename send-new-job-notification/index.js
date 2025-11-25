@@ -1,49 +1,87 @@
-// Cloud Run + Eventarc (Firestore) — CloudEvents handler
 const functions = require('@google-cloud/functions-framework');
 const admin = require('firebase-admin');
 
+// Initialize Firebase Admin
 admin.initializeApp();
 
-// Handles Firestore "document created" events for jobs/{jobId}
+/**
+ * CloudEvent Handler for "google.cloud.firestore.document.v1.created"
+ * This function runs automatically when a new document appears in Firestore.
+ */
 functions.cloudEvent('sendNewJobNotification', async (event) => {
   try {
-    // Useful breadcrumbs in logs
-    console.log('Event type:', event.type); // expect: google.cloud.firestore.document.v1.created
-    console.log('Subject:', event.subject); // e.g. .../documents/jobs/{jobId}
+    console.log('--- Fresh Container Started ---');
+    console.log('Event Type:', event.type);
+    console.log('Event Subject:', event.subject); 
 
-    // Extract jobId from the subject path if present
-    const jobId = (event.subject || '').split('/').pop();
-    if (jobId) console.log('New job created:', jobId);
+    // 1. Extract Job ID from the resource path (e.g. "documents/jobs/JOB_ID_HERE")
+    // We do NOT look in req.body because Eventarc sends metadata, not a JSON body.
+    const jobId = event.subject ? event.subject.split('/').pop() : 'UnknownJobId';
+    console.log(`Target Job ID: ${jobId}`);
 
     const db = admin.firestore();
 
-    // Fetch admin tokens
+    // 2. Fetch Tokens
+    // We look in the 'admin_fcm_tokens' collection as per your app setup.
     const snapshot = await db.collection('admin_fcm_tokens').get();
+
     if (snapshot.empty) {
-      console.log('No admin FCM tokens found.');
+      console.log('No admin tokens found in Firestore.');
+      return; 
+    }
+
+    // 3. Filter Valid Tokens
+    const tokens = snapshot.docs
+      .map(doc => doc.data().token || doc.get('token'))
+      .filter(t => t && typeof t === 'string');
+
+    if (tokens.length === 0) {
+      console.log('Token documents existed, but contained no valid token strings.');
       return;
     }
 
-    const tokens = snapshot.docs.map(d => d.get('token')).filter(Boolean);
-    if (!tokens.length) {
-      console.log('No valid tokens in admin_fcm_tokens.');
-      return;
-    }
+    console.log(`Preparing to send to ${tokens.length} device(s).`);
 
-    // Send multicast push
+    // 4. Notification Payload
     const message = {
-      notification: { title: 'New Job Alert!', body: 'A new job just landed!' },
-      tokens
+      notification: {
+        title: 'New Job Alert!',
+        body: 'A new job just landed! Check the dashboard.'
+      },
+      data: {
+        jobId: jobId,
+        click_action: 'FLUTTER_NOTIFICATION_CLICK'
+      },
+      tokens: tokens
     };
 
-    const res = await admin.messaging().sendMulticast(message);
-    console.log('Push result:', { successCount: res.successCount, failureCount: res.failureCount });
+    // 5. SENDING (The Critical Fix)
+    // We utilize sendEachForMulticast() which avoids the deprecated batch API
+    // that causes the "404 /batch" error in the logs.
+    const response = await admin.messaging().sendEachForMulticast(message);
+    
+    console.log('Batch Send Result:', {
+      successCount: response.successCount,
+      failureCount: response.failureCount
+    });
 
-    if (res.failureCount > 0) {
-      const failedTokens = res.responses.map((r, i) => (!r.success ? tokens[i] : null)).filter(Boolean);
-      console.log('Failed tokens:', failedTokens);
+    // 6. Log specific errors if any failed
+    if (response.failureCount > 0) {
+      const failedTokens = [];
+      response.responses.forEach((resp, idx) => {
+        if (!resp.success) {
+          failedTokens.push({
+            index: idx,
+            error: resp.error.message
+          });
+        }
+      });
+      console.log('Failed Delivery Details:', JSON.stringify(failedTokens, null, 2));
     }
-  } catch (err) {
-    console.error('Error handling Firestore event:', err);
+
+  } catch (error) {
+    console.error('CRITICAL FAILURE in sendNewJobNotification:', error);
+    // Re-throwing ensures Eventarc knows the delivery failed
+    throw error;
   }
 });
