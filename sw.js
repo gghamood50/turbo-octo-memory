@@ -13,15 +13,12 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const messaging = firebase.messaging();
 
-messaging.onBackgroundMessage(function(payload) {
-    console.log('[sw.js] Received background message ', payload);
-    const notificationTitle = payload.notification.title;
-    const notificationOptions = {
-        body: payload.notification.body,
-        icon: '/icons/icon-192x192.png'
-    };
+self.addEventListener('push', function(event) {
+    console.log('[sw.js] Push Received.');
+    console.log(`[sw.js] Push had this data: "${event.data.text()}"`);
 
-    self.registration.showNotification(notificationTitle, notificationOptions);
+    // The browser will display the notification from the 'notification' payload automatically.
+    // To prevent duplicates, we do not manually show a notification here.
 });
 
 const CACHE_NAME = 'safewayos-cache-v12'; // Incremented cache version
