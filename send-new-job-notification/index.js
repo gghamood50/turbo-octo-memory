@@ -6,23 +6,33 @@ admin.initializeApp();
 
 /**
  * CloudEvent Handler for "google.cloud.firestore.document.v1.created"
- * This function runs automatically when a new document appears in Firestore.
  */
 functions.cloudEvent('sendNewJobNotification', async (event) => {
   try {
     console.log('--- Fresh Container Started ---');
-    console.log('Event Type:', event.type);
+
+    // --- 🔍 IDENTITY DEBUG CHECK 🔍 ---
+    try {
+      const response = await fetch(
+        'http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/email', 
+        { headers: { 'Metadata-Flavor': 'Google' } }
+      );
+      const email = await response.text();
+      console.log(`Running as: [ ${email} ]`);
+    } catch (e) {
+      console.log('Could not verify identity:', e.message);
+    }
+    // ----------------------------------
+
     console.log('Event Subject:', event.subject); 
 
-    // 1. Extract Job ID from the resource path (e.g. "documents/jobs/JOB_ID_HERE")
-    // We do NOT look in req.body because Eventarc sends metadata, not a JSON body.
+    // 1. Extract Job ID
     const jobId = event.subject ? event.subject.split('/').pop() : 'UnknownJobId';
     console.log(`Target Job ID: ${jobId}`);
 
     const db = admin.firestore();
 
     // 2. Fetch Tokens
-    // We look in the 'admin_fcm_tokens' collection as per your app setup.
     const snapshot = await db.collection('admin_fcm_tokens').get();
 
     if (snapshot.empty) {
@@ -30,32 +40,35 @@ functions.cloudEvent('sendNewJobNotification', async (event) => {
       return; 
     }
 
-    // 3. Filter Valid Tokens
-    const tokens = snapshot.docs
+    // 3. Extract & Deduplicate Tokens
+    // We use a Set to ensure each token string appears only once.
+    const rawTokens = snapshot.docs
       .map(doc => doc.data().token || doc.get('token'))
       .filter(t => t && typeof t === 'string');
 
-    if (tokens.length === 0) {
-      console.log('Token documents existed, but contained no valid token strings.');
+    const uniqueTokens = [...new Set(rawTokens)];
+
+    if (uniqueTokens.length === 0) {
+      console.log('No valid token strings found.');
       return;
     }
 
-    console.log(`Preparing to send to ${tokens.length} device(s).`);
+    console.log(`Found ${rawTokens.length} raw tokens. Sending to ${uniqueTokens.length} unique device(s).`);
 
     // 4. Notification Payload
     const message = {
-      data: {
+      notification: {
         title: 'New Job Alert!',
-        body: 'A new job just landed! Check the dashboard.',
+        body: 'A new job just landed! Check the dashboard.'
+      },
+      data: {
         jobId: jobId,
         click_action: 'FLUTTER_NOTIFICATION_CLICK'
       },
-      tokens: tokens
+      tokens: uniqueTokens // Use the unique list
     };
 
-    // 5. SENDING (The Critical Fix)
-    // We utilize sendEachForMulticast() which avoids the deprecated batch API
-    // that causes the "404 /batch" error in the logs.
+    // 5. SENDING
     const response = await admin.messaging().sendEachForMulticast(message);
     
     console.log('Batch Send Result:', {
@@ -63,7 +76,6 @@ functions.cloudEvent('sendNewJobNotification', async (event) => {
       failureCount: response.failureCount
     });
 
-    // 6. Log specific errors if any failed
     if (response.failureCount > 0) {
       const failedTokens = [];
       response.responses.forEach((resp, idx) => {
@@ -79,7 +91,6 @@ functions.cloudEvent('sendNewJobNotification', async (event) => {
 
   } catch (error) {
     console.error('CRITICAL FAILURE in sendNewJobNotification:', error);
-    // Re-throwing ensures Eventarc knows the delivery failed
     throw error;
   }
 });
