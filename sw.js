@@ -13,15 +13,27 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const messaging = firebase.messaging();
 
-messaging.onBackgroundMessage(function(payload) {
-    console.log('[sw.js] Received background message ', payload);
-    const notificationTitle = payload.data?.title || payload.notification?.title || 'New Notification';
-    const notificationOptions = {
-        body: payload.data?.body || payload.notification?.body,
-        icon: '/icons/icon-192x192.png'
-    };
+self.addEventListener('push', event => {
+  console.log('[sw.js] Push Received.');
 
-    self.registration.showNotification(notificationTitle, notificationOptions);
+  let payload;
+  try {
+    payload = event.data.json();
+  } catch (e) {
+    console.error('Could not parse push data as JSON', e);
+    // Create a default payload if parsing fails
+    payload = { data: { title: 'New Notification', body: 'You have a new message.' } };
+  }
+
+  const notificationTitle = payload.data?.title || payload.notification?.title || 'New Notification';
+  const notificationOptions = {
+      body: payload.data?.body || payload.notification?.body,
+      icon: '/icons/icon-192x192.png'
+  };
+
+  event.waitUntil(
+    self.registration.showNotification(notificationTitle, notificationOptions)
+  );
 });
 
 const CACHE_NAME = 'safewayos-cache-v10'; // Incremented cache version
@@ -117,4 +129,12 @@ self.addEventListener('fetch', event => {
             // For example: return caches.match('/offline.html');
         })
     );
+});
+
+self.addEventListener('notificationclick', function(event) {
+  console.log('[sw.js] Notification click Received.');
+  event.notification.close();
+  event.waitUntil(
+    clients.openWindow('/')
+  );
 });
