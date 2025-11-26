@@ -57,11 +57,9 @@ functions.cloudEvent('sendNewJobNotification', async (event) => {
 
     // 4. Notification Payload
     const message = {
-      notification: {
-        title: 'New Job Alert!',
-        body: 'A new job just landed! Check the dashboard.'
-      },
       data: {
+        title: 'New Job Alert!',
+        body: 'A new job just landed! Check the dashboard.',
         jobId: jobId,
         click_action: 'FLUTTER_NOTIFICATION_CLICK'
       },
