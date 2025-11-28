@@ -1,5 +1,5 @@
-importScripts("https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js");
-importScripts("https://www.gstatic.com/firebasejs/9.0.0/firebase-messaging-compat.js");
+importScripts("https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js");
+importScripts("https://www.gstatic.com/firebasejs/9.22.1/firebase-messaging-compat.js");
 
 const firebaseConfig = {
     apiKey: "AIzaSyCNjGhWVguIWBAHyyLfTapsF_5Bp6ztRG0",
@@ -21,7 +21,7 @@ self.addEventListener('push', function(event) {
     // To prevent duplicates, we do not manually show a notification here.
 });
 
-const CACHE_NAME = 'safewayos-cache-v12'; // Incremented cache version
+const CACHE_NAME = 'safewayos-cache-v13'; // Incremented cache version
 const urlsToCache = [
   '/',
   '/index.html',
