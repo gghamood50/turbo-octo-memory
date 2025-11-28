@@ -4386,12 +4386,19 @@ if (sendAllInvoicesBtn) {
                 const permission = await Notification.requestPermission();
                 if (permission === 'granted') {
                     console.log('Notification permission granted.');
-                    const token = await messaging.getToken({ vapidKey: VAPID_KEY });
+
+                    const registration = await navigator.serviceWorker.register('/sw.js');
+
+                    const token = await messaging.getToken({
+                        vapidKey: VAPID_KEY,
+                        serviceWorkerRegistration: registration
+                    });
+
                     if (token) {
                         console.log('FCM Token:', token);
                         await saveTokenToFirestore(token);
                     } else {
-                        console.log('No registration token available. Request permission to generate one.');
+                        console.log('No registration token available.');
                     }
                 } else {
                     console.log('Unable to get permission to notify.');
