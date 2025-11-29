@@ -125,8 +125,8 @@ const restockPartForm = document.getElementById('restockPartForm');
 
 const dashboardUnscheduledJobsEl = document.getElementById('dashboardUnscheduledJobs');
 const dashboardScheduledJobsEl = document.getElementById('dashboardScheduledJobs');
-const dashboardTotalJobsEl = document.getElementById('dashboardTotalJobs');
-const dashboardLifetimeTripSheetsEl = document.getElementById('dashboardLifetimeTripSheets');
+const dashboardCompletedJobsEl = document.getElementById('dashboardCompletedJobs');
+const dashboardTotalInvoiceValueEl = document.getElementById('dashboardTotalInvoiceValue');
 const dashboardLatestJobsListEl = document.getElementById('dashboardLatestJobsList');
 
 const chatLog = document.getElementById('chatLog');
@@ -1267,6 +1267,9 @@ function listenForAllInvoices() {
         allInvoicesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         renderInvoiceDashboard(allInvoicesData);
         renderInvoices(allInvoicesData.slice(0, 5)); // Initially show only the first 5
+        if (currentView === 'dashboard') {
+            renderDashboardStats(allJobsData); // Update stats if invoice data changes
+        }
     }, (error) => {
         console.error("Error listening for all invoices:", error);
     });
@@ -1312,16 +1315,22 @@ function animateCountUp(element, targetValue, duration = 500) {
     requestAnimationFrame(updateCount);
 }
 
-function renderDashboardStats(jobs, tripSheets) {
+function renderDashboardStats(jobs) {
     const scheduledJobsCount = jobs.filter(j => j.status === 'Scheduled' || j.status === 'Awaiting completion').length;
-    const totalJobsCount = jobs.length;
-    const unscheduledJobsCount = totalJobsCount - scheduledJobsCount;
-    const totalTripSheetsCount = tripSheets.length;
+    const completedJobsCount = jobs.filter(j => j.status === 'Completed').length;
+    const totalJobsCount = jobs.length; // Kept for logic if needed, but not displayed as "Total" anymore
+    const unscheduledJobsCount = totalJobsCount - scheduledJobsCount - completedJobsCount;
+    
+    // Calculate total invoice value from global allInvoicesData
+    const totalInvoiceValue = allInvoicesData.reduce((sum, inv) => sum + (inv.total || 0), 0);
 
     animateCountUp(dashboardUnscheduledJobsEl, unscheduledJobsCount);
     animateCountUp(dashboardScheduledJobsEl, scheduledJobsCount);
-    animateCountUp(dashboardTotalJobsEl, totalJobsCount);
-    animateCountUp(dashboardLifetimeTripSheetsEl, totalTripSheetsCount);
+    animateCountUp(dashboardCompletedJobsEl, completedJobsCount);
+    
+    if (dashboardTotalInvoiceValueEl) {
+        dashboardTotalInvoiceValueEl.textContent = formatCurrency(totalInvoiceValue);
+    }
 
     const latestJobs = [...jobs].sort((a, b) => b.createdAt.toDate() - a.createdAt.toDate()).slice(0, 5);
     if (dashboardLatestJobsListEl) {
@@ -2137,7 +2146,7 @@ function listenForJobs() {
         renderJobs(allJobsData); 
         
         if (currentView === 'dashboard') {
-            listenForDashboardData(); // This will re-render dashboard stats if needed
+            renderDashboardStats(allJobsData); // This will re-render dashboard stats if needed
         }
         if (currentView === 'schedule') {
             // Re-load trip sheets which might depend on updated job data for status
@@ -2237,15 +2246,7 @@ function listenForInventoryItems() {
     }, (error) => console.error("Error listening for inventory items:", error));
 }
 
-function listenForDashboardData() {
-    const tripSheetsQuery = firebase.firestore().collection("tripSheets");
-    tripSheetsQuery.onSnapshot((snapshot) => {
-        const tripSheets = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        renderDashboardStats(allJobsData, tripSheets);
-    }, (error) => {
-        console.error("Error listening for trip sheets for dashboard:", error);
-    });
-}
+// listenForDashboardData removed as it was only used for trip sheet counts
 
 async function fetchAndRenderJobsForDate(date, technicianId, technicianName) {
     const todaysRouteHeading = document.getElementById('todaysRouteHeading');
@@ -4466,7 +4467,7 @@ if (sendAllInvoicesBtn) {
                         listenForJobs();
                         listenForTechnicians();
                         initializeInventory().then(listenForInventoryItems);
-                        listenForDashboardData();
+                        // listenForDashboardData() removed
                         listenForWarranties();
                         listenForAllInvoices();
                         if (tripSheetDateInput.value) {
