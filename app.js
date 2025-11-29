@@ -4381,7 +4381,7 @@ if (sendAllInvoicesBtn) {
         // --- FCM Token Management ---
         const VAPID_KEY = "BG9gp_etd4xZZujYau9k7jDkjLbns-Sqj0tXOuc2BAqd9B8vwI00-XhXhPjkqRPVI1wG4eYmzvR-3X7j0t1QOlo";
 
-        async function requestNotificationPermission(role, email) {
+        async function requestNotificationPermission(role, email, technicianId = null) {
             try {
                 const permission = await Notification.requestPermission();
                 if (permission === 'granted') {
@@ -4390,7 +4390,7 @@ if (sendAllInvoicesBtn) {
                     if (token) {
                         console.log('FCM Token:', token);
                         if (role === 'worker') {
-                            await saveWorkerTokenToFirestore(token, email);
+                            await saveWorkerTokenToFirestore(token, email, technicianId);
                         } else {
                             await saveTokenToFirestore(token);
                         }
@@ -4418,14 +4418,18 @@ if (sendAllInvoicesBtn) {
             }
         }
 
-        async function saveWorkerTokenToFirestore(token, email) {
+        async function saveWorkerTokenToFirestore(token, email, technicianId) {
             const tokenRef = db.collection('worker_fcm_tokens').doc(token);
             try {
-                await tokenRef.set({
+                const data = {
                     token: token,
                     email: email,
                     createdAt: firebase.firestore.FieldValue.serverTimestamp()
-                });
+                };
+                if (technicianId) {
+                    data.technicianId = technicianId;
+                }
+                await tokenRef.set(data, { merge: true });
                 console.log('Worker token saved to Firestore.');
             } catch (error) {
                 console.error('Error saving worker token to Firestore: ', error);
@@ -4499,7 +4503,10 @@ if (sendAllInvoicesBtn) {
                 } else {
                     // --- WORKER ROLE ---
                     console.log("Worker user signed in:", user.email);
-                    requestNotificationPermission('worker', user.email); // Request permission for worker
+
+                    // Request permission immediately to ensure prompt appears (without awaiting ID first)
+                    requestNotificationPermission('worker', user.email);
+
                     const techName = user.email.split('@')[0];
                     const capitalizedTechName = techName.charAt(0).toUpperCase() + techName.slice(1);
                     
@@ -4511,6 +4518,9 @@ if (sendAllInvoicesBtn) {
                         
                         currentWorkerTechnicianId = technician.id;
                         currentWorkerTechnicianName = technician.name;
+
+                        // Update permission with technician ID (will update token in DB)
+                        requestNotificationPermission('worker', user.email, currentWorkerTechnicianId);
 
                         loginScreen.style.display = 'none';
                         layoutContainer.style.display = 'none';
