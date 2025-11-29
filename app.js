@@ -4381,7 +4381,7 @@ if (sendAllInvoicesBtn) {
         // --- FCM Token Management ---
         const VAPID_KEY = "BG9gp_etd4xZZujYau9k7jDkjLbns-Sqj0tXOuc2BAqd9B8vwI00-XhXhPjkqRPVI1wG4eYmzvR-3X7j0t1QOlo";
 
-        async function requestNotificationPermission() {
+        async function requestNotificationPermission(role, email) {
             try {
                 const permission = await Notification.requestPermission();
                 if (permission === 'granted') {
@@ -4389,7 +4389,11 @@ if (sendAllInvoicesBtn) {
                     const token = await messaging.getToken({ vapidKey: VAPID_KEY });
                     if (token) {
                         console.log('FCM Token:', token);
-                        await saveTokenToFirestore(token);
+                        if (role === 'worker') {
+                            await saveWorkerTokenToFirestore(token, email);
+                        } else {
+                            await saveTokenToFirestore(token);
+                        }
                     } else {
                         console.log('No registration token available. Request permission to generate one.');
                     }
@@ -4408,9 +4412,23 @@ if (sendAllInvoicesBtn) {
                     token: token,
                     createdAt: firebase.firestore.FieldValue.serverTimestamp()
                 });
-                console.log('Token saved to Firestore.');
+                console.log('Admin token saved to Firestore.');
             } catch (error) {
-                console.error('Error saving token to Firestore: ', error);
+                console.error('Error saving admin token to Firestore: ', error);
+            }
+        }
+
+        async function saveWorkerTokenToFirestore(token, email) {
+            const tokenRef = db.collection('worker_fcm_tokens').doc(token);
+            try {
+                await tokenRef.set({
+                    token: token,
+                    email: email,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                console.log('Worker token saved to Firestore.');
+            } catch (error) {
+                console.error('Error saving worker token to Firestore: ', error);
             }
         }
 
@@ -4434,7 +4452,7 @@ if (sendAllInvoicesBtn) {
                 if (user.email === 'admin@safewayos2.app') {
                     // --- ADMIN ROLE ---
                     console.log("Admin user signed in:", user.email);
-                    requestNotificationPermission(); // Request permission for admin
+                    requestNotificationPermission('admin'); // Request permission for admin
                     loginScreen.style.display = 'none';
                     workerPwaView.classList.add('hidden');
                     layoutContainer.style.display = 'flex';
@@ -4481,6 +4499,7 @@ if (sendAllInvoicesBtn) {
                 } else {
                     // --- WORKER ROLE ---
                     console.log("Worker user signed in:", user.email);
+                    requestNotificationPermission('worker', user.email); // Request permission for worker
                     const techName = user.email.split('@')[0];
                     const capitalizedTechName = techName.charAt(0).toUpperCase() + techName.slice(1);
                     
