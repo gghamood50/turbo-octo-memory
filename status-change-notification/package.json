@@ -1,0 +1,10 @@
+{
+  "name": "status-change-notification",
+  "version": "1.0.0",
+  "description": "Cloud Function to send notifications when job status changes",
+  "main": "index.js",
+  "dependencies": {
+    "@google-cloud/functions-framework": "^3.0.0",
+    "firebase-admin": "^11.0.0"
+  }
+}
