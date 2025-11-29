@@ -1767,7 +1767,8 @@ function toggleJobDetailsEditMode(isEditing) {
     document.getElementById('cancelEditJobDetailsBtn').classList.toggle('hidden', !isEditing);
 
     // Disable/Enable footer buttons
-    document.getElementById('sendManualLinkBtn').disabled = isEditing;
+    const triggerAiCallBtn = document.getElementById('triggerAiCallBtn');
+    if (triggerAiCallBtn) triggerAiCallBtn.disabled = isEditing;
     document.getElementById('confirmScheduleBtn').disabled = isEditing;
     document.getElementById('cancelScheduleJob').disabled = isEditing;
 
@@ -2027,13 +2028,14 @@ async function openScheduleJobModal(job) {
             setTimeout(() => { copyBtn.innerHTML = originalIcon; }, 2000);
         };
     }
-    const sendManualLinkBtn = document.getElementById('sendManualLinkBtn');
-    if (sendManualLinkBtn) {
+    const triggerAiCallBtn = document.getElementById('triggerAiCallBtn');
+    if (triggerAiCallBtn) {
+        // Expanded visibility logic: allow if 'Needs Scheduling', 'Rescheduled...', 'Link Sent!', or 'AI Call Failed'
         const status = job.status || 'Needs Scheduling';
-        if (status === 'Needs Scheduling' || status.startsWith('Rescheduled by')) {
-            sendManualLinkBtn.style.visibility = 'visible';
+        if (status === 'Needs Scheduling' || status.startsWith('Rescheduled by') || status === 'Link Sent!' || status === 'AI Call Failed') {
+            triggerAiCallBtn.style.visibility = 'visible';
         } else {
-            sendManualLinkBtn.style.visibility = 'hidden';
+            triggerAiCallBtn.style.visibility = 'hidden';
         }
     }
 
@@ -3078,56 +3080,59 @@ if(saveInvoiceBtn) {
         }
     });
 
-    const sendManualLinkBtn = document.getElementById('sendManualLinkBtn');
-    if (sendManualLinkBtn) {
-        sendManualLinkBtn.addEventListener('click', async () => {
+    const triggerAiCallBtn = document.getElementById('triggerAiCallBtn');
+    if (triggerAiCallBtn) {
+        triggerAiCallBtn.addEventListener('click', async () => {
             const jobId = document.getElementById('modalScheduleJobId').value;
             const statusSpan = document.getElementById('manualLinkStatus');
 
             if (!jobId) {
-                showMessage('Cannot send link: Job ID is missing.', 'error');
+                showMessage('Cannot trigger call: Job ID is missing.', 'error');
                 return;
             }
 
-            const originalBtnHtml = sendManualLinkBtn.innerHTML;
-            sendManualLinkBtn.disabled = true;
-            sendManualLinkBtn.innerHTML = `<span class="material-icons-outlined text-lg animate-spin">sync</span> Sending...`;
+            const originalBtnHtml = triggerAiCallBtn.innerHTML;
+            triggerAiCallBtn.disabled = true;
+            triggerAiCallBtn.innerHTML = `<span class="material-icons-outlined text-lg animate-spin">sync</span> Triggering...`;
             if (statusSpan) statusSpan.textContent = '';
 
             try {
-                const response = await fetch(SEND_SCHEDULING_LINKS_URL, {
+                const response = await fetch(TRIGGER_AI_CALLS_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ jobId: jobId })
+                    body: JSON.stringify({ manualTrigger: true, jobId: jobId })
                 });
 
-                const result = await response.json();
-
-                if (!response.ok || !result.success) {
-                    throw new Error(result.message || `Server responded with status ${response.status}`);
+                if (response.status === 429) { // Quiet hours error
+                    const errorResult = await response.json();
+                    throw new Error(errorResult.message || 'Calls cannot be made during quiet hours.');
+                } else if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Server responded with ${response.status}: ${errorText}`);
                 }
 
-                // Definite success
-                showMessage(result.message, 'success');
+                const result = await response.json(); // Usually returns "OK..." text or json
+                
+                showMessage('AI call triggered successfully!', 'success');
                 if (statusSpan) {
-                    statusSpan.textContent = 'Link sent successfully!';
+                    statusSpan.textContent = 'Call triggered!';
                     statusSpan.classList.remove('text-red-600');
                     statusSpan.classList.add('text-green-600');
                     setTimeout(() => { statusSpan.textContent = ''; }, 5000);
                 }
 
             } catch (error) {
-                console.error('Error sending manual scheduling link:', error);
+                console.error('Error triggering AI call:', error);
                 showMessage(error.message, 'error');
                 if (statusSpan) {
-                    statusSpan.textContent = 'Failed to send!';
+                    statusSpan.textContent = 'Failed to trigger!';
                     statusSpan.classList.remove('text-green-600');
                     statusSpan.classList.add('text-red-600');
                     setTimeout(() => { statusSpan.textContent = ''; }, 5000);
                 }
             } finally {
-                sendManualLinkBtn.disabled = false;
-                sendManualLinkBtn.innerHTML = originalBtnHtml;
+                triggerAiCallBtn.disabled = false;
+                triggerAiCallBtn.innerHTML = originalBtnHtml;
             }
         });
     }
