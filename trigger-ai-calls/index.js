@@ -244,7 +244,7 @@ const db = admin.firestore();
 
 // Create a handler for POST requests, which is what Eventarc sends.
 app.post('/', async (req, res) => {
-    const { manualTrigger } = req.body;
+    const { manualTrigger, jobId } = req.body;
     const isEventarc = req.headers['ce-specversion'];
 
     // If it's a scheduled run (from Eventarc) AND it's a manual trigger, don't run.
@@ -272,11 +272,21 @@ app.post('/', async (req, res) => {
   console.log("Starting trigger-ai-calls job.");
 
   try {
-    
-    // 3. Query the 'jobs' collection for jobs that need scheduling.
-    const jobsToUpdateQuery = db.collection("jobs").where("status", "==", "Needs Scheduling");
-
-    const snapshot = await jobsToUpdateQuery.get();
+    let snapshot;
+    if (jobId) {
+         console.log(`Manual trigger for specific job: ${jobId}`);
+         const jobDoc = await db.collection("jobs").doc(jobId).get();
+         if (!jobDoc.exists) {
+             console.log(`Job ${jobId} not found.`);
+             return res.status(404).json({ success: false, message: "Job not found" });
+         }
+         // Construct a fake snapshot-like object (array of docs)
+         snapshot = { empty: false, docs: [jobDoc], size: 1 };
+    } else {
+        // 3. Query the 'jobs' collection for jobs that need scheduling.
+        const jobsToUpdateQuery = db.collection("jobs").where("status", "==", "Needs Scheduling");
+        snapshot = await jobsToUpdateQuery.get();
+    }
 
     if (snapshot.empty) {
       console.log("No jobs found to update.");
@@ -292,17 +302,30 @@ app.post('/', async (req, res) => {
     const docs = snapshot.docs;
 
     await mapWithConcurrency(docs, DEFAULT_CONCURRENCY, async (doc) => {
-      const jobId = doc.id;
-      const jobRef = db.collection("jobs").doc(jobId);
+      const currentJobId = doc.id;
+      const jobRef = db.collection("jobs").doc(currentJobId);
 
       // --- Idempotency/lock: take a per-job lock via transaction ---
       const locked = await db.runTransaction(async (t) => {
         const snap = await t.get(jobRef);
         const d = snap.data() || {};
+        
+        // If jobId was provided explicitly, we bypass the "Needs Scheduling" check
+        // But we still check callInProgress to avoid double-firing.
+        const isTargeted = (jobId && jobId === currentJobId);
+        
         // Only proceed if it's still eligible and not locked
-        if (d.status !== "Needs Scheduling" || d.callInProgress === true) {
-          return false; // another worker/instance has it, or it's no longer eligible
+        // Logic: if targeted, ignore status check. if not targeted, require "Needs Scheduling".
+        // In ALL cases, require callInProgress !== true.
+        
+        if (d.callInProgress === true) {
+             return false;
         }
+
+        if (!isTargeted && d.status !== "Needs Scheduling") {
+            return false;
+        }
+
         t.update(jobRef, {
           callInProgress: true,
           callLockAt: admin.firestore.FieldValue.serverTimestamp(),
