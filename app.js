@@ -1366,6 +1366,8 @@ function renderWorkerPwaView(jobs, technicianName) {
         day: 'numeric'
     });
 
+    checkNotificationPermissionUI();
+
     if (jobs.length === 0) {
         const todaysRouteHeading = document.getElementById('todaysRouteHeading');
         const headingText = todaysRouteHeading ? todaysRouteHeading.textContent.toLowerCase() : "the selected day";
@@ -3133,6 +3135,18 @@ if(saveInvoiceBtn) {
     if(openAddPartModalButton) openAddPartModalButton.addEventListener('click', () => openAddPartModal());
     if(openLogPartUsageButton) openLogPartUsageButton.addEventListener('click', openLogPartUsageModal);
 
+    // Worker Notifications
+    const workerEnableNotificationsBtn = document.getElementById('workerEnableNotificationsBtn');
+    if (workerEnableNotificationsBtn) {
+        workerEnableNotificationsBtn.addEventListener('click', () => {
+            if (auth.currentUser && currentWorkerTechnicianId) {
+                requestNotificationPermission('worker', auth.currentUser.email, currentWorkerTechnicianId).then(() => {
+                    checkNotificationPermissionUI();
+                });
+            }
+        });
+    }
+
     // Form Submissions
     if(editTechForm) editTechForm.addEventListener('submit', async (e) => {
         e.preventDefault();
@@ -4381,7 +4395,7 @@ if (sendAllInvoicesBtn) {
         // --- FCM Token Management ---
         const VAPID_KEY = "BG9gp_etd4xZZujYau9k7jDkjLbns-Sqj0tXOuc2BAqd9B8vwI00-XhXhPjkqRPVI1wG4eYmzvR-3X7j0t1QOlo";
 
-        async function requestNotificationPermission(role, email) {
+        async function requestNotificationPermission(role, email, technicianId = null) {
             try {
                 const permission = await Notification.requestPermission();
                 if (permission === 'granted') {
@@ -4390,7 +4404,7 @@ if (sendAllInvoicesBtn) {
                     if (token) {
                         console.log('FCM Token:', token);
                         if (role === 'worker') {
-                            await saveWorkerTokenToFirestore(token, email);
+                            await saveWorkerTokenToFirestore(token, email, technicianId);
                         } else {
                             await saveTokenToFirestore(token);
                         }
@@ -4418,14 +4432,18 @@ if (sendAllInvoicesBtn) {
             }
         }
 
-        async function saveWorkerTokenToFirestore(token, email) {
+        async function saveWorkerTokenToFirestore(token, email, technicianId) {
             const tokenRef = db.collection('worker_fcm_tokens').doc(token);
             try {
-                await tokenRef.set({
+                const data = {
                     token: token,
                     email: email,
                     createdAt: firebase.firestore.FieldValue.serverTimestamp()
-                });
+                };
+                if (technicianId) {
+                    data.technicianId = technicianId;
+                }
+                await tokenRef.set(data, { merge: true });
                 console.log('Worker token saved to Firestore.');
             } catch (error) {
                 console.error('Error saving worker token to Firestore: ', error);
@@ -4499,7 +4517,7 @@ if (sendAllInvoicesBtn) {
                 } else {
                     // --- WORKER ROLE ---
                     console.log("Worker user signed in:", user.email);
-                    requestNotificationPermission('worker', user.email); // Request permission for worker
+
                     const techName = user.email.split('@')[0];
                     const capitalizedTechName = techName.charAt(0).toUpperCase() + techName.slice(1);
                     
@@ -4511,6 +4529,8 @@ if (sendAllInvoicesBtn) {
                         
                         currentWorkerTechnicianId = technician.id;
                         currentWorkerTechnicianName = technician.name;
+
+                        requestNotificationPermission('worker', user.email, currentWorkerTechnicianId); // Request permission for worker with tech ID
 
                         loginScreen.style.display = 'none';
                         layoutContainer.style.display = 'none';
@@ -5541,6 +5561,18 @@ function handleAddWorker(event) {
 function setInitialDate() {
     const invoiceDateInput = document.getElementById('invoiceDate');
     if(invoiceDateInput) invoiceDateInput.value = new Date().toISOString().split('T')[0];
+}
+
+function checkNotificationPermissionUI() {
+    const container = document.getElementById('workerNotificationPermissionContainer');
+    if (!container) return;
+
+    // Only show if the permission is 'default' (not prompted yet)
+    if (Notification.permission === 'default') {
+        container.classList.remove('hidden');
+    } else {
+        container.classList.add('hidden');
+    }
 }
 
 let lineItemCount = 0;
