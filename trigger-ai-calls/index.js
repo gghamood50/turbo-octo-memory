@@ -346,6 +346,7 @@ app.post('/', async (req, res) => {
         const customer_name = jobData.customer;
         const phone = jobData.phone;
         const phone_to_call = (phone === '+18777804236') ? '+971507471805' : phone;
+        const warranty = jobData.warrantyProvider || null;
 
         const blandAiPayload = {
           customer_name,
@@ -355,6 +356,7 @@ app.post('/', async (req, res) => {
           final_gap,
           callback_num: "+971507471805",
           phone_to_call,
+          warranty,
         };
 
         const blandAiRequest = prepareBlandAiRequest(blandAiApiKey, blandAiPayload);
