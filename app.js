@@ -1267,9 +1267,7 @@ function listenForAllInvoices() {
         allInvoicesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         renderInvoiceDashboard(allInvoicesData);
         renderInvoices(allInvoicesData.slice(0, 5)); // Initially show only the first 5
-        if (currentView === 'dashboard') {
-            renderDashboardStats(allJobsData); // Update stats if invoice data changes
-        }
+        renderDashboardStats(allJobsData); // Update stats if invoice data changes
     }, (error) => {
         console.error("Error listening for all invoices:", error);
     });
@@ -1615,6 +1613,9 @@ function switchView(targetId) {
     }
     if (targetId === 'daniel') {
         chatInput.focus();
+    }
+    if (targetId === 'dashboard') {
+        renderDashboardStats(allJobsData);
     }
 }
 
@@ -2147,9 +2148,8 @@ function listenForJobs() {
         // Always attempt to render jobs; renderJobs has internal checks for DOM elements
         renderJobs(allJobsData); 
         
-        if (currentView === 'dashboard') {
-            renderDashboardStats(allJobsData); // This will re-render dashboard stats if needed
-        }
+        renderDashboardStats(allJobsData); // This will re-render dashboard stats if needed
+        
         if (currentView === 'schedule') {
             // Re-load trip sheets which might depend on updated job data for status
             loadTripSheetsForDate(tripSheetDateInput.value); 
@@ -4491,20 +4491,20 @@ if (sendAllInvoicesBtn) {
                                 listenForBookedCounts(capacityDatePicker.value);
                             });
                         }
+
+                        applyTabVisibility();
+                        renderTabVisibilitySettings();
+                        
+                        // If the default view 'dashboard' is hidden, switch to the first available one.
+                        const settings = loadTabSettings();
+                        if (settings['dashboard'] === false) {
+                            const firstVisibleTab = Array.from(navLinks).find(link => settings[link.dataset.target] !== false && link.dataset.target !== 'settings');
+                            switchView(firstVisibleTab ? firstVisibleTab.dataset.target : 'settings');
+                        } else {
+                            switchView('dashboard');
+                        }
                     });
                     initializeDanielAIChat();
-                    
-                    applyTabVisibility();
-                    renderTabVisibilitySettings();
-                    
-                    // If the default view 'dashboard' is hidden, switch to the first available one.
-                    const settings = loadTabSettings();
-                    if (settings['dashboard'] === false) {
-                        const firstVisibleTab = Array.from(navLinks).find(link => settings[link.dataset.target] !== false && link.dataset.target !== 'settings');
-                        switchView(firstVisibleTab ? firstVisibleTab.dataset.target : 'settings');
-                    } else {
-                        switchView('dashboard');
-                    }
 
                 } else {
                     // --- WORKER ROLE ---
