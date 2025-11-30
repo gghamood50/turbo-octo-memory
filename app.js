@@ -3097,10 +3097,14 @@ if(saveInvoiceBtn) {
             if (statusSpan) statusSpan.textContent = '';
 
             try {
+                // Fetch the job object to get the warranty name
+                const job = allJobsData.find(j => j.id === jobId);
+                const warrantyName = (job && job.warrantyProvider) ? job.warrantyProvider : null;
+
                 const response = await fetch(TRIGGER_AI_CALLS_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ manualTrigger: true, jobId: jobId })
+                    body: JSON.stringify({ manualTrigger: true, jobId: jobId, warrantyName: warrantyName })
                 });
 
                 if (response.status === 429) { // Quiet hours error
