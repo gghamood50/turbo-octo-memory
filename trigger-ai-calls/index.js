@@ -18,7 +18,7 @@ function prepareBlandAiRequest(apiKey, payload) {
     throw new Error('Phone number is required in the payload.');
   }
 
-  const pathwayId = "616618c3-8ddb-4e78-a77f-c84423286886";
+  const pathwayId = "119a6020-e792-4307-8f3f-8020524a5697";
   const voice = payload.voice || "Nat";
 
   const body = {
