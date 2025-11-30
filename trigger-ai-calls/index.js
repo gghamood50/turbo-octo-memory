@@ -290,7 +290,7 @@ app.post('/', async (req, res) => {
 
     if (snapshot.empty) {
       console.log("No jobs found to update.");
-      return res.status(200).send("OK: No jobs to update.");
+      return res.status(200).json({ message: "No jobs found to update." });
     }
 
     // Prefetch shared inputs ONCE per run
@@ -381,7 +381,7 @@ app.post('/', async (req, res) => {
 
     const count = snapshot.size;
     console.log(`Attempted to process ${count} job(s).`);
-    res.status(200).send(`OK: Attempted to process ${count} job(s). Check logs for details.`);
+    res.status(200).json({ message: `Successfully initiated AI calls for ${count} job(s).` });
 
   } catch (error) {
     console.error("Error in trigger-ai-calls job:", error);
