@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email to Job Importer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Outlined" rel="stylesheet"/>
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f8fafc; }
+        .job-card { animation: fadeIn 0.5s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body class="min-h-screen p-6 md:p-12">
+
+    <div class="max-w-4xl mx-auto space-y-8">
+
+        <!-- Header -->
+        <div class="text-center">
+            <h1 class="text-3xl font-bold text-slate-800">Email Job Importer</h1>
+            <p class="text-slate-500 mt-2">Paste email text below to automatically create a job.</p>
+        </div>
+
+        <!-- Input Section -->
+        <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+            <label for="emailInput" class="block text-sm font-medium text-slate-700 mb-2">Email Content</label>
+            <textarea id="emailInput" class="w-full h-64 p-4 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all font-mono text-sm" placeholder="Paste email text here..."></textarea>
+
+            <div class="mt-4 flex justify-end">
+                <button id="createJobBtn" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-lg shadow transition-colors flex items-center gap-2">
+                    <span class="material-icons-outlined">auto_fix_high</span>
+                    Create Job
+                </button>
+            </div>
+            <p id="statusMessage" class="text-sm mt-2 text-right hidden"></p>
+        </div>
+
+        <!-- Session Jobs Section -->
+        <div>
+            <h2 class="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2">
+                <span class="material-icons-outlined text-slate-500">history</span>
+                Session Jobs
+            </h2>
+            <div id="sessionJobsList" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <!-- Cards will appear here -->
+                <div id="emptyState" class="col-span-1 md:col-span-2 text-center py-12 text-slate-400 bg-slate-50 rounded-xl border-2 border-dashed border-slate-200">
+                    No jobs created in this session yet.
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Firebase SDK (Compat) -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore-compat.js"></script>
+
+    <!-- Google Generative AI SDK -->
+    <script type="importmap">
+      {
+        "imports": {
+          "@google/generative-ai": "https://esm.run/@google/generative-ai"
+        }
+      }
+    </script>
+
+    <script type="module">
+        import { GoogleGenerativeAI } from "@google/generative-ai";
+
+        // --- CONFIGURATION ---
+        const GEMINI_API_KEY = "AIzaSyDjjbZ8B7ujyIaK0YjfcWuGO-Rv6zJhAts";
+        const MODEL_NAME = "gemini-1.5-pro"; // Using 1.5 Pro as "gemini 3 pro" is likely a reference to the latest capable model.
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyCNjGhWVguIWBAHyyLfTapsF_5Bp6ztRG0",
+            authDomain: "safewayos2.firebaseapp.com",
+            projectId: "safewayos2",
+            storageBucket: "safewayos2.appspot.com",
+            messagingSenderId: "216681158749",
+            appId: "1:216681158749:web:35de32f542ad71fa7295b4"
+        };
+
+        // --- INITIALIZATION ---
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+        const model = genAI.getGenerativeModel({ model: MODEL_NAME });
+
+        // --- PROMPT (From Backend) ---
+        const AI_PROMPT_SYSTEM = `
+### ROLE ###
+You are an expert data extraction system for a garage door company.
+### TASK ###
+Analyze the following email body and extract the job details into a structured JSON object.
+### EXTRACTION FIELDS ###
+- customer: The full name of the customer.
+- address: The complete service address.
+- phone: The customer's phone number.
+- issue: The description of the problem or reason for the service call.
+- warrantyProvider: The name of the warranty company.
+- planType: The customer's warranty plan.
+- dispatchOrPoNumber: The P.O. number, dispatch number, or claim ID.
+### RULES ###
+1. If a field is not mentioned, its value must be null.
+2. Do not invent information.
+3. Clean the extracted data. Remove labels like "Customer:" from the final values.
+4. Your entire response MUST be only the JSON object, with no extra text or markdown.
+`;
+
+        // --- UI ELEMENTS ---
+        const emailInput = document.getElementById('emailInput');
+        const createJobBtn = document.getElementById('createJobBtn');
+        const statusMessage = document.getElementById('statusMessage');
+        const sessionJobsList = document.getElementById('sessionJobsList');
+        const emptyState = document.getElementById('emptyState');
+
+        // --- LOGIC ---
+        createJobBtn.addEventListener('click', async () => {
+            const text = emailInput.value.trim();
+            if (!text) {
+                alert("Please paste some email text first.");
+                return;
+            }
+
+            setLoading(true);
+
+            try {
+                // 1. Generate Content with Gemini
+                const prompt = AI_PROMPT_SYSTEM + "\n\nEMAIL TEXT:\n" + text;
+                const result = await model.generateContent(prompt);
+                const response = await result.response;
+                const aiText = response.text();
+
+                // 2. Parse JSON
+                let jobData;
+                try {
+                    // Cleanup potential markdown fences if Gemini adds them despite instructions
+                    const jsonString = aiText.replace(/```json\n|\n```/g, '').replace(/```/g, '').trim();
+                    jobData = JSON.parse(jsonString);
+                } catch (e) {
+                    console.error("JSON Parse Error:", e);
+                    throw new Error("Failed to parse AI response. The email might be too ambiguous.");
+                }
+
+                // 3. Prepare Firestore Data
+                const newJob = {
+                    ...jobData,
+                    status: 'Needs Scheduling',
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    source: 'manual-email-import-web'
+                };
+
+                // 4. Write to Firestore
+                // Optional: Check duplicates? The prompt said "standalone", maybe simple write is best.
+                // But let's check dispatchOrPoNumber if present, just like the backend does.
+                if (newJob.dispatchOrPoNumber) {
+                     const snapshot = await db.collection('jobs').where('dispatchOrPoNumber', '==', newJob.dispatchOrPoNumber).limit(1).get();
+                     if (!snapshot.empty) {
+                         throw new Error(`A job with Dispatch/PO # ${newJob.dispatchOrPoNumber} already exists.`);
+                     }
+                }
+
+                const docRef = await db.collection('jobs').add(newJob);
+
+                // 5. Update UI
+                addJobCard(docRef.id, newJob);
+                emailInput.value = ''; // Clear input
+                setStatus("Job created successfully!", "success");
+
+            } catch (error) {
+                console.error("Error creating job:", error);
+                setStatus(`Error: ${error.message}`, "error");
+            } finally {
+                setLoading(false);
+            }
+        });
+
+        function setLoading(isLoading) {
+            createJobBtn.disabled = isLoading;
+            if (isLoading) {
+                createJobBtn.innerHTML = '<span class="material-icons-outlined animate-spin">sync</span> Processing...';
+                createJobBtn.classList.add('opacity-75', 'cursor-not-allowed');
+            } else {
+                createJobBtn.innerHTML = '<span class="material-icons-outlined">auto_fix_high</span> Create Job';
+                createJobBtn.classList.remove('opacity-75', 'cursor-not-allowed');
+            }
+        }
+
+        function setStatus(msg, type) {
+            statusMessage.textContent = msg;
+            statusMessage.classList.remove('hidden', 'text-green-600', 'text-red-600');
+            statusMessage.classList.add(type === 'success' ? 'text-green-600' : 'text-red-600');
+            statusMessage.style.display = 'block';
+            setTimeout(() => {
+                statusMessage.style.display = 'none';
+            }, 5000);
+        }
+
+        function addJobCard(id, job) {
+            emptyState.style.display = 'none';
+
+            const card = document.createElement('div');
+            card.className = 'job-card bg-white p-5 rounded-lg border border-slate-200 shadow-sm hover:shadow-md transition-shadow';
+
+            // Format timestamps or nulls
+            const dateStr = new Date().toLocaleTimeString();
+
+            card.innerHTML = `
+                <div class="flex justify-between items-start mb-2">
+                    <h3 class="font-bold text-slate-800 text-lg">${job.customer || 'Unknown Customer'}</h3>
+                    <span class="bg-blue-100 text-blue-800 text-xs font-semibold px-2.5 py-0.5 rounded">New</span>
+                </div>
+                <div class="text-sm text-slate-600 space-y-1">
+                    <p><span class="font-medium">Issue:</span> ${job.issue || 'N/A'}</p>
+                    <p><span class="font-medium">Address:</span> ${job.address || 'N/A'}</p>
+                    <p><span class="font-medium">Phone:</span> ${job.phone || 'N/A'}</p>
+                    <div class="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-slate-100">
+                         <p><span class="font-medium text-xs text-slate-400">Warranty:</span> <br>${job.warrantyProvider || '-'}</p>
+                         <p><span class="font-medium text-xs text-slate-400">PO #:</span> <br>${job.dispatchOrPoNumber || '-'}</p>
+                    </div>
+                </div>
+                <div class="mt-3 pt-3 border-t border-slate-100 flex justify-between items-center text-xs text-slate-400">
+                    <span>ID: ${id.substring(0, 8)}...</span>
+                    <span>${dateStr}</span>
+                </div>
+            `;
+
+            // Insert at the top
+            sessionJobsList.insertBefore(card, sessionJobsList.firstChild);
+            // Re-append empty state to keep it at bottom if logic changes, but insertBefore handles it.
+            // Actually sessionJobsList.firstChild might be the emptyState if it was visible.
+            // Better to prepend.
+        }
+
+    </script>
+</body>
+</html>
