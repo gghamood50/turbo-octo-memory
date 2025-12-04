@@ -425,6 +425,35 @@
                                 <h1 class="text-slate-900 text-3xl font-bold leading-tight tracking-tight">Invoice Dashboard</h1>
                                 <p class="text-slate-600 text-base font-normal leading-normal">View and manage all generated invoices.</p>
                             </div>
+                             <!-- Filter Button & Pop-up Container -->
+                            <div class="relative">
+                                <button id="invoice-dateFilterToggle" class="date-filter-btn flex items-center gap-2">
+                                    <span class="material-icons-outlined text-xl">filter_list</span>
+                                    <span id="invoice-activeFilterDisplay">All Time</span>
+                                </button>
+                                <div id="invoice-dateFilterPopup" class="date-filter-popup">
+                                    <div class="p-4 space-y-4">
+                                        <div>
+                                            <p class="text-sm font-semibold text-slate-600 mb-2">Quick Ranges</p>
+                                            <div id="invoice-date-filter-presets" class="grid grid-cols-2 gap-2">
+                                                <button class="date-filter-btn text-xs" data-range="7">Last 7 Days</button>
+                                                <button class="date-filter-btn text-xs" data-range="30">Last 30 Days</button>
+                                                <button class="date-filter-btn text-xs" data-range="365">Last Year</button>
+                                                <button class="date-filter-btn text-xs active" data-range="all">All Time</button>
+                                            </div>
+                                        </div>
+                                        <hr/>
+                                        <div>
+                                            <p class="text-sm font-semibold text-slate-600 mb-2">Custom Range</p>
+                                            <div class="space-y-2">
+                                                <div class="flex items-center gap-2 text-sm"><label for="invoice-dateFrom" class="w-12">From:</label><input type="date" id="invoice-dateFrom" class="form-input text-sm p-1.5 rounded-md border-slate-300 w-full"></div>
+                                                <div class="flex items-center gap-2 text-sm"><label for="invoice-dateTo" class="w-12">To:</label><input type="date" id="invoice-dateTo" class="form-input text-sm p-1.5 rounded-md border-slate-300 w-full"></div>
+                                                <button id="invoice-applyDateRange" class="date-filter-btn bg-green-600 text-white w-full mt-2">Apply</button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 mt-6">
     <div class="stat-card-stitch">
