@@ -28,7 +28,7 @@ app.use((req, res, next) => {
   }
   next();
 });
-app.use(express.json({ limit: "25mb" }));
+app.use(express.json({ limit: "200mb" }));
 
 /**
  * ---------------------------------------------------------------------------
