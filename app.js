@@ -5210,7 +5210,7 @@ async function generatePDF(invoiceDataForPdf, isPreview = false) {
 
         // --- HEADER ---
         // PASTE YOUR BASE64 LOGO DATA HERE
-        const logoBase64Data = ""; 
+        const logoBase64Data = ""; // <-- PASTE BASE64 LOGO STRING INSIDE THE QUOTES
         if (logoBase64Data) {
             try {
                 // The logo's vertical position is set to -25 as requested.
