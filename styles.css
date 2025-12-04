@@ -288,6 +288,10 @@ body {
     align-self: flex-start; 
     border-bottom-left-radius: 0.25rem; 
 }
+.chat-bubble-ai.processing-bubble {
+    display: flex;
+    align-items: center;
+}
 .chat-input-area {
     display: flex; 
     padding: 1rem; 
