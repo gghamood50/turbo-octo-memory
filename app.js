@@ -51,6 +51,7 @@ let currentFilteredData = [];
 let currentJobToReschedule = null;
 let scheduleModalAbortController = null;
 let currentWorkerTechnicianId = null;
+let currentInvoiceDateRange = { type: 'all' };
 
 // --- DOM Elements ---
 const tabVisibilityContainer = document.getElementById('tab-visibility-container');
@@ -347,32 +348,75 @@ async function openInvoiceViewModal(invoiceId) {
     }
 }
 
-function filterInvoices() {
-    const searchInput = invoiceSearchInput.value.toLowerCase();
-    const searchTerms = searchInput.split(',').map(term => term.trim()).filter(term => term);
+function applyInvoiceDateFilter(range, fromDateStr = null, toDateStr = null) {
+    if (range === 'all') {
+        currentInvoiceDateRange = { type: 'all' };
+    } else if (range === 'custom') {
+         // Create dates in local time by appending time string
+         const from = new Date(fromDateStr + 'T00:00:00');
+         const to = new Date(toDateStr + 'T23:59:59.999');
+         currentInvoiceDateRange = { type: 'custom', from: from, to: to };
+    } else {
+        const days = parseInt(range, 10);
+        const endDate = new Date();
+        const startDate = new Date();
+        startDate.setDate(endDate.getDate() - days);
+        currentInvoiceDateRange = { type: 'range', days: days, startDate: startDate, endDate: endDate };
+    }
+    filterInvoices();
+}
 
-    if (searchTerms.length === 0) {
-        renderInvoices(allInvoicesData);
-        return;
+function filterInvoices() {
+    let searchTerms = [];
+    if (invoiceSearchInput) {
+        const searchInput = invoiceSearchInput.value.toLowerCase();
+        searchTerms = searchInput.split(',').map(term => term.trim()).filter(term => term);
     }
 
-    const filteredInvoices = allInvoicesData.filter(invoice => {
-        // For each invoice, check if all search terms are found
-        return searchTerms.every(term => {
-            const invoiceDate = invoice.createdAt?.toDate().toLocaleDateString().toLowerCase() || '';
-            // Check if the current term is found in any of the fields
-            return (
-                (invoice.invoiceNumber && invoice.invoiceNumber.toLowerCase().includes(term)) ||
-                (invoice.customerName && invoice.customerName.toLowerCase().includes(term)) ||
-                (invoiceDate.includes(term)) ||
-                (invoice.poNumber && invoice.poNumber.toLowerCase().includes(term)) ||
-                (invoice.customerAddress && invoice.customerAddress.toLowerCase().includes(term)) ||
-                (invoice.customerPhone && invoice.customerPhone.toLowerCase().includes(term))
-            );
-        });
-    });
+    let filteredInvoices = allInvoicesData;
 
-    renderInvoices(filteredInvoices);
+    // 1. Apply Date Filter
+    if (currentInvoiceDateRange.type !== 'all') {
+        filteredInvoices = filteredInvoices.filter(invoice => {
+            const invoiceDate = invoice.createdAt?.toDate();
+            if (!invoiceDate) return false;
+
+            if (currentInvoiceDateRange.type === 'custom') {
+                 return invoiceDate >= currentInvoiceDateRange.from && invoiceDate <= currentInvoiceDateRange.to;
+            } else if (currentInvoiceDateRange.type === 'range') {
+                 return invoiceDate >= currentInvoiceDateRange.startDate && invoiceDate <= currentInvoiceDateRange.endDate;
+            }
+            return true;
+        });
+    }
+
+    // 2. Apply Search Filter
+    if (searchTerms.length > 0) {
+        filteredInvoices = filteredInvoices.filter(invoice => {
+            return searchTerms.every(term => {
+                const invoiceDate = invoice.createdAt?.toDate().toLocaleDateString().toLowerCase() || '';
+                return (
+                    (invoice.invoiceNumber && invoice.invoiceNumber.toLowerCase().includes(term)) ||
+                    (invoice.customerName && invoice.customerName.toLowerCase().includes(term)) ||
+                    (invoiceDate.includes(term)) ||
+                    (invoice.poNumber && invoice.poNumber.toLowerCase().includes(term)) ||
+                    (invoice.customerAddress && invoice.customerAddress.toLowerCase().includes(term)) ||
+                    (invoice.customerPhone && invoice.customerPhone.toLowerCase().includes(term))
+                );
+            });
+        });
+    }
+
+    const isDefaultView = currentInvoiceDateRange.type === 'all' && searchTerms.length === 0;
+
+    if (isDefaultView) {
+        renderInvoices(filteredInvoices.slice(0, 5));
+    } else {
+        renderInvoices(filteredInvoices);
+    }
+
+    renderInvoiceDashboard(filteredInvoices);
+    currentFilteredData = filteredInvoices;
 }
 
 function renderInvoices(invoices) {
@@ -3737,6 +3781,56 @@ if(saveInvoiceBtn) {
                 return completionDate && completionDate >= startDate && completionDate <= endDate;
             });
             updateDashboard(filteredData);
+        });
+    }
+
+    // --- INVOICE DATE FILTER LOGIC ---
+    const invoiceDateFilterToggle = document.getElementById('invoice-dateFilterToggle');
+    const invoiceDateFilterPopup = document.getElementById('invoice-dateFilterPopup');
+
+    if (invoiceDateFilterToggle) {
+        invoiceDateFilterToggle.addEventListener('click', () => {
+            invoiceDateFilterPopup.classList.toggle('is-visible');
+        });
+    }
+
+    document.addEventListener('click', (event) => {
+        if (invoiceDateFilterToggle && invoiceDateFilterPopup && !invoiceDateFilterToggle.contains(event.target) && !invoiceDateFilterPopup.contains(event.target)) {
+            invoiceDateFilterPopup.classList.remove('is-visible');
+        }
+    });
+
+    const invoicePresetsContainer = document.getElementById('invoice-date-filter-presets');
+    if (invoicePresetsContainer) {
+        invoicePresetsContainer.addEventListener('click', (event) => {
+            if (event.target.tagName === 'BUTTON') {
+                invoicePresetsContainer.querySelectorAll('.date-filter-btn').forEach(btn => btn.classList.remove('active'));
+                event.target.classList.add('active');
+                document.getElementById('invoice-activeFilterDisplay').textContent = event.target.textContent;
+                invoiceDateFilterPopup.classList.remove('is-visible');
+
+                const range = event.target.dataset.range;
+                applyInvoiceDateFilter(range);
+            }
+        });
+    }
+
+    const invoiceApplyDateRange = document.getElementById('invoice-applyDateRange');
+    if (invoiceApplyDateRange) {
+        invoiceApplyDateRange.addEventListener('click', () => {
+             invoicePresetsContainer.querySelectorAll('.date-filter-btn').forEach(btn => btn.classList.remove('active'));
+            const fromDateStr = document.getElementById('invoice-dateFrom').value;
+            const toDateStr = document.getElementById('invoice-dateTo').value;
+
+            if (!fromDateStr || !toDateStr) {
+                alert("Please select both a 'From' and 'To' date.");
+                return;
+            }
+
+            document.getElementById('invoice-activeFilterDisplay').textContent = `Custom Range`;
+            invoiceDateFilterPopup.classList.remove('is-visible');
+
+            applyInvoiceDateFilter('custom', fromDateStr, toDateStr);
         });
     }
 
